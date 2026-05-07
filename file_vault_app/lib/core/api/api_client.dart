@@ -1,15 +1,11 @@
 import 'package:dio/dio.dart';
+import 'package:file_vault_app/core/config/api_config.dart';
 
 /// Central Dio instance used by all service classes.
-/// Base URL points to the NestJS backend.
-/// JWT token injection will be wired in once auth is implemented.
+/// Base URL points to the NestJS backend (Railway production deployment).
+/// JWT token injection is handled via setToken() method.
 class ApiClient {
   ApiClient._();
-
-  // 10.0.2.2 is the Android emulator's alias for the host machine (your PC).
-  // Use this instead of localhost — localhost inside the emulator points to
-  // the emulator itself, not your Windows machine where the backend runs.
-  static const String _baseUrl = 'http://10.0.2.2:3000/api/v1';
 
   static Dio get instance => _instance;
 
@@ -18,9 +14,10 @@ class ApiClient {
   static Dio _buildDio() {
     final dio = Dio(
       BaseOptions(
-        baseUrl: _baseUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 30),
+        baseUrl: ApiConfig.fullBaseUrl,
+        connectTimeout: ApiConfig.connectTimeout,
+        receiveTimeout: ApiConfig.receiveTimeout,
+        sendTimeout: ApiConfig.sendTimeout,
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
@@ -30,6 +27,7 @@ class ApiClient {
 
     dio.interceptors.add(_LoggingInterceptor());
     dio.interceptors.add(_AuthInterceptor());
+    dio.interceptors.add(_ErrorInterceptor());
 
     return dio;
   }
@@ -42,6 +40,58 @@ class ApiClient {
   /// Call this on logout to remove the token.
   static void clearToken() {
     _instance.options.headers.remove('Authorization');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Error interceptor — handles network errors and provides user-friendly messages
+// ---------------------------------------------------------------------------
+
+class _ErrorInterceptor extends Interceptor {
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    String userMessage;
+    
+    switch (err.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        userMessage = 'Connection timeout. Please check your internet connection.';
+        break;
+      case DioExceptionType.connectionError:
+        userMessage = 'Cannot connect to server. Please check your internet connection.';
+        break;
+      case DioExceptionType.badResponse:
+        final statusCode = err.response?.statusCode;
+        if (statusCode == 401) {
+          userMessage = 'Session expired. Please login again.';
+        } else if (statusCode == 403) {
+          userMessage = 'Access denied. You do not have permission.';
+        } else if (statusCode == 404) {
+          userMessage = 'Resource not found.';
+        } else if (statusCode == 500) {
+          userMessage = 'Server error. Please try again later.';
+        } else {
+          userMessage = 'Request failed. Please try again.';
+        }
+        break;
+      case DioExceptionType.cancel:
+        userMessage = 'Request cancelled.';
+        break;
+      default:
+        userMessage = 'Network error. Please try again.';
+    }
+    
+    // Attach user-friendly message to the error
+    final enhancedError = DioException(
+      requestOptions: err.requestOptions,
+      response: err.response,
+      type: err.type,
+      error: err.error,
+      message: userMessage,
+    );
+    
+    handler.next(enhancedError);
   }
 }
 

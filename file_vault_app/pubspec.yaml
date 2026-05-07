@@ -23,7 +23,7 @@ dependencies:
   file_picker: ^8.1.7
   
   # Receive shared files from other apps
-  # TEMPORARILY DISABLED: Requires Developer Mode on Windows for symlink support
+  # TEMPORARILY DISABLED: Plugin has Kotlin compilation issues
   # receive_sharing_intent: ^1.8.0
 
   # Date formatting

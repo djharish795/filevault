@@ -24,15 +24,14 @@ async function bootstrap() {
   // Global API prefix
   app.setGlobalPrefix('api');
 
-  // CORS for React frontend
+  // CORS configuration
+  // Allow all origins for mobile app compatibility (Flutter doesn't send Origin header)
+  // In production, mobile apps make direct HTTP requests without CORS restrictions
   app.enableCors({
-    origin: [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://localhost:5174',
-      'http://127.0.0.1:5174',
-    ],
+    origin: true, // Allow all origins (required for mobile apps)
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   // Swagger docs

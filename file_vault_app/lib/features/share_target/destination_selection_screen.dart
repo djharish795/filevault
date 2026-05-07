@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:file_vault_app/features/auth/auth_provider.dart';
 import 'package:file_vault_app/features/projects/project_model.dart';
 import 'package:file_vault_app/features/projects/project_service.dart';
 import 'package:file_vault_app/features/folders/folder_model.dart';

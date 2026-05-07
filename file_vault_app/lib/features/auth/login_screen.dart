@@ -372,23 +372,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           width: 1,
                         ),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.info_outline_rounded,
-                            size: 18,
-                            color: _kPrimary,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Contact your administrator for account access',
-                              style: TextStyle(
-                                color: _kPrimary.withOpacity(0.9),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                height: 1.4,
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                size: 18,
+                                color: _kPrimary,
                               ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Test Credentials',
+                                  style: TextStyle(
+                                    color: _kPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Email: admin@securevault.com\nPassword: password123',
+                            style: TextStyle(
+                              color: _kPrimary.withOpacity(0.85),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              height: 1.5,
+                              fontFamily: 'monospace',
                             ),
                           ),
                         ],
