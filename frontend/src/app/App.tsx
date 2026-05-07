@@ -10,6 +10,8 @@ import { FileShareModal } from '../features/files/components/FileShareModal';
 import { ProjectCard } from '../features/projects/components/ProjectCard';
 import { UploadModal } from '../features/files/components/UploadModal';
 import { UserManagementPage } from '../features/users/UserManagementPage';
+import { UserSharedPage } from '../features/user/UserSharedPage';
+import { UserWorkspacePage } from '../features/user/UserWorkspacePage';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -365,6 +367,7 @@ const ProjectsList = () => {
   );
 };
 
+// Legacy SharedWithMePage - kept for admin routes, users now use UserSharedPage
 const SharedWithMePage = () => {
   const { user } = useAuthStore();
   const { data: projects, isLoading, error } = useProjects();
@@ -438,17 +441,17 @@ export const App = () => {
                    <ErrorBoundary><ProjectsList /></ErrorBoundary>
                  } />
                  <Route path="projects/:id/files" element={
-                   <ErrorBoundary><DashboardPage /></ErrorBoundary>
+                   <ErrorBoundary><UserWorkspacePage /></ErrorBoundary>
                  } />
                  {/* Alias routes — shared/recent cards navigate here, redirect to canonical path */}
                  <Route path="shared/:id/files" element={
-                   <ErrorBoundary><DashboardPage /></ErrorBoundary>
+                   <ErrorBoundary><UserWorkspacePage /></ErrorBoundary>
                  } />
                  <Route path="recent/:id/files" element={
-                   <ErrorBoundary><DashboardPage /></ErrorBoundary>
+                   <ErrorBoundary><UserWorkspacePage /></ErrorBoundary>
                  } />
                  <Route path="shared" element={
-                   <ErrorBoundary><SharedWithMePage /></ErrorBoundary>
+                   <ErrorBoundary><UserSharedPage /></ErrorBoundary>
                  } />
                  <Route path="recent" element={<GenericPage title="Recent Documents" />} />
               </Route>

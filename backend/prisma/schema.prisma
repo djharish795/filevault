@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -16,8 +17,10 @@ model User {
   createdAt     DateTime        @default(now())
   auditLogs     AuditLog[]
   fileAccess    FileAccess[]
+  folderAccess  FolderAccess[]
   ownedFiles    File[]
   projects      ProjectMember[]
+  messages      Message[]
 }
 
 model Project {
@@ -34,15 +37,17 @@ model Project {
 
 // Virtual subfolder inside a project — supports infinite nesting via parentId
 model Folder {
-  id        String   @id @default(uuid())
-  name      String
-  projectId String
-  parentId  String?
-  createdAt DateTime @default(now())
-  children  Folder[] @relation("FolderTree")
-  files     File[]
-  parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id])
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id           String         @id @default(uuid())
+  name         String
+  projectId    String
+  parentId     String?
+  createdAt    DateTime       @default(now())
+  children     Folder[]       @relation("FolderTree")
+  files        File[]
+  parent       Folder?        @relation("FolderTree", fields: [parentId], references: [id])
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  accessList   FolderAccess[]
+  messages     Message[]
 }
 
 model ProjectMember {
@@ -71,6 +76,7 @@ model File {
   folder      Folder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
   owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages    Message[]
 }
 
 // Tracks which users have been explicitly granted access to a specific file
@@ -83,6 +89,36 @@ model FileAccess {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([fileId, userId])
+}
+
+// Tracks which users have been granted access to a specific folder (subfolder-level sharing)
+// Admin manually grants per-folder access — having access to one subfolder does NOT
+// grant access to sibling or parent folders.
+model FolderAccess {
+  id         String   @id @default(uuid())
+  folderId   String
+  userId     String
+  grantedAt  DateTime @default(now())
+  folder     Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([folderId, userId])
+}
+
+// Chat message scoped to a folder — messages never cross folder boundaries
+model Message {
+  id          String      @id @default(uuid())
+  folderId    String
+  senderId    String
+  messageType String      @default("text") // "text" | "file" | "system"
+  text        String?
+  fileId      String?
+  createdAt   DateTime    @default(now())
+  folder      Folder      @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  sender      User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  file        File?       @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([folderId, createdAt])
 }
 
 model AuditLog {

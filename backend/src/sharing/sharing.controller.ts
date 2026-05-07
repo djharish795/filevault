@@ -169,10 +169,12 @@ export class SharingController {
     const canShare = requestingUser.isMasterAdmin || file.ownerId === requestingUser.id;
     if (!canShare) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin or file owner can share files' } }, HttpStatus.FORBIDDEN);
 
-    const member = await this.prisma.projectMember.findUnique({
+    // Automatically add user to project if not already a member
+    await this.prisma.projectMember.upsert({
       where: { projectId_userId: { projectId, userId: body.userId } },
+      update: {},
+      create: { projectId, userId: body.userId } as any,
     });
-    if (!member) throw new HttpException({ success: false, error: { code: 'BAD_REQUEST', message: 'User must be a project member first' } }, HttpStatus.BAD_REQUEST);
 
     await (this.prisma as any).fileAccess.upsert({
       where: { fileId_userId: { fileId, userId: body.userId } },

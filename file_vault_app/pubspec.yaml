@@ -1,0 +1,41 @@
+name: file_vault_app
+description: FileVault - Mobile Document Management System
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # API client
+  dio: ^5.7.0
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # File picking for upload
+  file_picker: ^8.1.7
+  
+  # Receive shared files from other apps
+  # TEMPORARILY DISABLED: Requires Developer Mode on Windows for symlink support
+  # receive_sharing_intent: ^1.8.0
+
+  # Date formatting
+  intl: ^0.19.0
+
+  # Secure token storage (Keychain on iOS, Keystore on Android)
+  flutter_secure_storage: ^9.2.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
