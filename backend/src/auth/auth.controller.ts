@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Body, Res, Req, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Res, Req, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
@@ -51,6 +51,24 @@ export class AuthController {
       res.clearCookie('refresh_token');
       throw new HttpException({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or expired refresh token' } }, HttpStatus.UNAUTHORIZED);
     }
+  }
+
+  // ─── GET /auth/me — return current authenticated user ────────────────────────
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMe(@Req() req: any) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, name: true, email: true, isMasterAdmin: true },
+    });
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: { code: 'NOT_FOUND', message: 'User not found' } },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return { success: true, data: { user } };
   }
 
   // ─── Update own profile (name, phone) — any authenticated user ───────────────
