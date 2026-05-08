@@ -92,12 +92,14 @@ model FileAccess {
 }
 
 // Tracks which users have been granted access to a specific folder (subfolder-level sharing)
-// Admin manually grants per-folder access — having access to one subfolder does NOT
-// grant access to sibling or parent folders.
+// When a user has FolderAccess to a folder, they can see ALL files in that folder
+// (current and future) without needing individual FileAccess entries.
+// This is ADDITIVE to file-level sharing — both mechanisms work independently.
 model FolderAccess {
   id         String   @id @default(uuid())
   folderId   String
   userId     String
+  grantedBy  String?  // admin userId who granted access (nullable for backward compat)
   grantedAt  DateTime @default(now())
   folder     Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)

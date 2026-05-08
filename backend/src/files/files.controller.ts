@@ -187,7 +187,7 @@ export class FilesController {
     }
   }
 
-  // ─── Download ─────────────────────────────────────────────────────────────────
+  // ─── Download (force-download) ────────────────────────────────────────────────
 
   @Get(':fileId/download')
   async downloadFile(
@@ -195,6 +195,30 @@ export class FilesController {
     @Param('fileId') fileId: string,
     @Req() req: any,
     @Res() res: Response,
+  ) {
+    return this._serveFile(projectId, fileId, req, res, 'attachment');
+  }
+
+  // ─── Open inline (preview in browser / mobile viewer) ────────────────────────
+
+  @Get(':fileId/open')
+  async openFile(
+    @Param('projectId') projectId: string,
+    @Param('fileId') fileId: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    return this._serveFile(projectId, fileId, req, res, 'inline');
+  }
+
+  // ─── Shared file-serving logic ────────────────────────────────────────────────
+
+  private async _serveFile(
+    projectId: string,
+    fileId: string,
+    req: any,
+    res: Response,
+    disposition: 'attachment' | 'inline',
   ) {
     const user = req.user;
 
@@ -218,24 +242,27 @@ export class FilesController {
     const fs = await import('fs');
     if (!fs.existsSync(diskPath)) {
       throw new HttpException(
-        { success: false, error: { code: 'NOT_FOUND', message: 'File not found on disk' } },
+        { success: false, error: { code: 'NOT_FOUND', message: 'File no longer exists on server' } },
         HttpStatus.NOT_FOUND,
       );
     }
 
-    // Audit log
     await this.prisma.auditLog.create({
       data: {
         action: 'FILE_ACCESSED',
         userId: user.id,
         projectId,
         fileId: file.id,
-        metadata: { fileName: file.name, accessType: 'download' },
+        metadata: { fileName: file.name, accessType: disposition },
       },
     });
 
-    res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `${disposition}; filename="${encodeURIComponent(file.name)}"`,
+    );
     res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=300');
     res.sendFile(diskPath);
   }
 

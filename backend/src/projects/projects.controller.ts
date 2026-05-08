@@ -130,25 +130,34 @@ export class ProjectsController {
     if (user.isMasterAdmin) {
       visibleFiles = project.files;
     } else {
-      // Filter in-memory using the files already fetched with the project.
-      // For each file: show it if user is the owner.
-      // For shared files: check FileAccess table separately.
-      // Using try/catch because FileAccess table may not exist yet if db push hasn't run.
+      // A user can see a file if:
+      //   1. They own it
+      //   2. They have explicit FileAccess to it
+      //   3. They have FolderAccess to the folder containing it (folder-level sharing)
       let sharedFileIds = new Set<string>();
+      let accessibleFolderIds = new Set<string>();
+
       try {
-        const entries = await (this.prisma as any).fileAccess.findMany({
-          where: { userId: user.id },
-          select: { fileId: true },
-        });
-        sharedFileIds = new Set(entries.map((e: any) => e.fileId));
+        const [fileEntries, folderEntries] = await Promise.all([
+          (this.prisma as any).fileAccess.findMany({
+            where: { userId: user.id },
+            select: { fileId: true },
+          }),
+          this.prisma.folderAccess.findMany({
+            where: { userId: user.id },
+            select: { folderId: true },
+          }),
+        ]);
+        sharedFileIds = new Set(fileEntries.map((e: any) => e.fileId));
+        accessibleFolderIds = new Set(folderEntries.map((e: any) => e.folderId));
       } catch (err) {
-        // FileAccess table not yet created — run: npx prisma db push
-        console.error('[FileAccess] Query failed:', err?.message ?? err);
+        console.error('[Permission] Query failed:', err?.message ?? err);
       }
 
       visibleFiles = project.files.filter(file =>
         file.ownerId === user.id ||
-        sharedFileIds.has(file.id)
+        sharedFileIds.has(file.id) ||
+        (file.folderId !== null && accessibleFolderIds.has(file.folderId))
       );
     }
 
