@@ -45,9 +45,11 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
 
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
-  console.log(`Backend running on: http://localhost:${port}`);
-  console.log(`Uploaded files served at: http://localhost:${port}/uploads/<filename>`);
-  console.log(`Swagger docs: http://localhost:${port}/docs`);
+  // Must bind to 0.0.0.0 for Railway (and any container/cloud deployment).
+  // Binding to localhost (default) makes the server unreachable from outside.
+  await app.listen(port, '0.0.0.0');
+  console.log(`Backend running on port ${port}`);
+  console.log(`Uploaded files served at: /uploads/<filename>`);
+  console.log(`Swagger docs: /docs`);
 }
 bootstrap();
