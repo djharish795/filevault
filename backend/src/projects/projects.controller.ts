@@ -138,7 +138,7 @@ export class ProjectsController {
       let accessibleFolderIds = new Set<string>();
 
       try {
-        const [fileEntries, folderEntries] = await Promise.all([
+        const [fileEntries, folderEntries, allFolders] = await Promise.all([
           (this.prisma as any).fileAccess.findMany({
             where: { userId: user.id },
             select: { fileId: true },
@@ -147,9 +147,33 @@ export class ProjectsController {
             where: { userId: user.id },
             select: { folderId: true },
           }),
+          this.prisma.folder.findMany({
+            where: { projectId: id },
+            select: { id: true, parentId: true },
+          }),
         ]);
         sharedFileIds = new Set(fileEntries.map((e: any) => e.fileId));
         accessibleFolderIds = new Set(folderEntries.map((e: any) => e.folderId));
+
+        const folderTree = new Map<string, string[]>();
+        for (const f of allFolders) {
+          if (f.parentId) {
+            if (!folderTree.has(f.parentId)) folderTree.set(f.parentId, []);
+            folderTree.get(f.parentId)!.push(f.id);
+          }
+        }
+        
+        const queue = Array.from(accessibleFolderIds);
+        while (queue.length > 0) {
+          const curr = queue.shift()!;
+          const children = folderTree.get(curr) || [];
+          for (const child of children) {
+            if (!accessibleFolderIds.has(child)) {
+              accessibleFolderIds.add(child);
+              queue.push(child);
+            }
+          }
+        }
       } catch (err) {
         console.error('[Permission] Query failed:', err?.message ?? err);
       }

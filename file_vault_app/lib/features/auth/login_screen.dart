@@ -359,56 +359,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 24),
 
                     // ── Info text ─────────────────────────────────────────
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _kPrimaryLight,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _kPrimary.withOpacity(0.2),
-                          width: 1,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.info_outline_rounded,
-                                size: 18,
-                                color: _kPrimary,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Test Credentials',
-                                  style: TextStyle(
-                                    color: _kPrimary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Email: admin@securevault.com\nPassword: password123',
-                            style: TextStyle(
-                              color: _kPrimary.withOpacity(0.85),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              height: 1.5,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    
                     const SizedBox(height: 40),
                   ],
                 ),

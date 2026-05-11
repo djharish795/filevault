@@ -1,9 +1,12 @@
-﻿
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:open_file/open_file.dart';
 import 'package:file_vault_app/features/auth/auth_provider.dart';
+import 'package:file_vault_app/features/auth/edit_profile_screen.dart';
 import 'package:file_vault_app/features/chat/chat_model.dart';
 import 'package:file_vault_app/features/chat/chat_provider.dart';
 import 'package:file_vault_app/features/files/file_model.dart';
@@ -12,7 +15,7 @@ import 'package:file_vault_app/features/folders/folder_provider.dart';
 import 'package:file_vault_app/features/folders/folder_service.dart';
 import 'package:file_vault_app/features/folders/folder_state.dart';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// --- Design tokens ------------------------------------------------------------
 
 const _kPrimary      = Color(0xFFE65C2F);
 const _kPrimaryLight = Color(0xFFFFF0EB);
@@ -32,7 +35,7 @@ const _kAvatarColors = [
 Color _avatarColor(String s) =>
     _kAvatarColors[s.codeUnitAt(0) % _kAvatarColors.length];
 
-// ─── FolderScreen ─────────────────────────────────────────────────────────────
+// --- FolderScreen -------------------------------------------------------------
 
 class FolderScreen extends ConsumerStatefulWidget {
   final String projectId;
@@ -77,7 +80,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     super.dispose();
   }
 
-  // ── Toast ─────────────────────────────────────────────────────────────────
+  // -- Toast -----------------------------------------------------------------
 
   void _toast(String msg, {bool isError = false}) {
     if (!mounted) return;
@@ -93,7 +96,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     ));
   }
 
-  // ── Upload ────────────────────────────────────────────────────────────────
+  // -- Upload ----------------------------------------------------------------
 
   Future<void> _uploadFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -122,7 +125,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     final ext  = picked.extension?.toLowerCase() ?? '';
     final mime = mimeMap[ext] ?? 'application/octet-stream';
 
-    _toast('Uploading ${picked.name}…');
+    _toast('Uploading ${picked.name}�');
     try {
       final file = await FolderService().uploadFile(
         projectId: widget.projectId,
@@ -138,7 +141,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     }
   }
 
-  // ── Create subfolder ──────────────────────────────────────────────────────
+  // -- Create subfolder ------------------------------------------------------
 
   void _showCreateFolderSheet() {
     showModalBottomSheet<void>(
@@ -160,7 +163,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     );
   }
 
-  // ── Delete selected ───────────────────────────────────────────────────────
+  // -- Delete selected -------------------------------------------------------
 
   Future<void> _deleteSelected() async {
     final count =
@@ -206,7 +209,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     }
   }
 
-  // ── Share selected ────────────────────────────────────────────────────────
+  // -- Share selected --------------------------------------------------------
 
   void _shareSelected() {
     final selectedIds = List<String>.from(
@@ -233,7 +236,24 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     );
   }
 
-  // ── Logout ────────────────────────────────────────────────────────────────
+  // -- Share folder access ---------------------------------------------------
+
+  void _showFolderShareModal() {
+    if (widget.folderId == null) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _FolderAccessModal(
+        projectId: widget.projectId,
+        folderId: widget.folderId!,
+        folderName: widget.folderName ?? widget.projectName,
+        onDone: () => _toast('Folder access updated.'),
+      ),
+    );
+  }
+
+  // -- Logout ----------------------------------------------------------------
 
   Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
@@ -271,124 +291,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     }
   }
 
-  // ── Profile sheet ─────────────────────────────────────────────────────────
-
-  void _showProfileSheet() {
-    final authUser = ref.read(authProvider).user;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: _kBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Avatar
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    _avatarColor(authUser?.name ?? 'User'),
-                    _avatarColor(authUser?.name ?? 'User').withValues(alpha: 0.8),
-                  ],
-                ),
-                border: Border.all(color: Colors.white, width: 3),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(20),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Text(
-                  authUser?.name?.isNotEmpty == true
-                      ? (authUser?.name ?? 'U')[0].toUpperCase()
-                      : 'U',
-                  style: const TextStyle(
-                    fontSize: 32,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              authUser?.name ?? 'User',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: _kTextDark,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              authUser?.email ?? '',
-              style: const TextStyle(
-                fontSize: 14,
-                color: _kTextGrey,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: authUser?.isMasterAdmin == true
-                    ? _kPrimaryLight
-                    : _kSurface,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                authUser?.isMasterAdmin == true ? 'Administrator' : 'User',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: authUser?.isMasterAdmin == true
-                      ? _kPrimary
-                      : _kTextGrey,
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
-            const Text(
-              'Contact your administrator to update your profile information.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: _kTextGrey,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // -- Build -----------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -403,23 +306,25 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Breadcrumb ─────────────────────────────────────────────
+          // -- Breadcrumb ---------------------------------------------
           _Breadcrumb(crumbs: state.breadcrumbs),
 
-          // ── Action bar: Select Files + New Subfolder + Upload ──────
+          // -- Action bar: Select Files + New Subfolder + Upload ------
           if (!isSel)
             _ActionBar(
               isAdmin: isAdmin,
               hasFiles: state.files.isNotEmpty,
+              isSubfolder: widget.folderId != null,
               onSelectFiles: () => ref.read(folderViewProvider(_args).notifier).enterSelectionMode(),
               onNewFolder: _showCreateFolderSheet,
               onUpload: _uploadFile,
+              onShareFolder: widget.folderId != null ? _showFolderShareModal : null,
             ),
 
-          // ── Tab bar (only in subfolders) ───────────────────────────
+          // -- Tab bar (only in subfolders) ---------------------------
           if (widget.folderId != null) _FolderTabBar(controller: _tabController),
 
-          // ── Tab content ────────────────────────────────────────────
+          // -- Tab content --------------------------------------------
           Expanded(
             child: widget.folderId != null
                 ? TabBarView(
@@ -459,7 +364,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     );
   }
 
-  // ── App bars ──────────────────────────────────────────────────────────────
+  // -- App bars --------------------------------------------------------------
 
   PreferredSizeWidget _normalAppBar() {
     final authUser = ref.read(authProvider).user;
@@ -512,8 +417,8 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
               ),
               child: Center(
                 child: Text(
-                  authUser?.name?.isNotEmpty == true
-                      ? (authUser?.name ?? 'U')[0].toUpperCase()
+                  (authUser?.name ?? '').isNotEmpty
+                      ? authUser!.name[0].toUpperCase()
                       : 'U',
                   style: const TextStyle(
                     fontSize: 14,
@@ -527,7 +432,9 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
               if (value == 'logout') {
                 _handleLogout();
               } else if (value == 'profile') {
-                _showProfileSheet();
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const EditProfileScreen(),
+                ));
               }
             },
             itemBuilder: (context) => [
@@ -632,7 +539,8 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
                     fontWeight: FontWeight.w700,
                     fontSize: 13)),
           ),
-        if (isAdmin && state.selectedFileIds.isNotEmpty)
+        if (state.selectedFileIds.isNotEmpty && (isAdmin || state.selectedFileIds.every((id) =>
+              state.files.any((f) => f.id == id && f.owner == ref.read(authProvider).user?.name))))
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.white),
             tooltip: 'Delete',
@@ -644,7 +552,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
   }
 }
 
-// ─── Breadcrumb ───────────────────────────────────────────────────────────────
+// --- Breadcrumb ---------------------------------------------------------------
 
 class _Breadcrumb extends StatelessWidget {
   final List<BreadcrumbEntry> crumbs;
@@ -685,104 +593,138 @@ class _Breadcrumb extends StatelessWidget {
   }
 }
 
-// ─── Action bar ───────────────────────────────────────────────────────────────
+// --- Action bar ---------------------------------------------------------------
 
 class _ActionBar extends StatelessWidget {
   final bool isAdmin;
   final bool hasFiles;
+  final bool isSubfolder;        // true when folderId != null
   final VoidCallback onSelectFiles;
   final VoidCallback onNewFolder;
   final VoidCallback onUpload;
+  final VoidCallback? onShareFolder; // admin only, subfolder only
 
   const _ActionBar({
     required this.isAdmin,
     required this.hasFiles,
+    required this.isSubfolder,
     required this.onSelectFiles,
     required this.onNewFolder,
     required this.onUpload,
+    this.onShareFolder,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Buttons to show:
+    // - Select Files (when files exist)
+    // - New Folder (admin only)
+    // - Share Folder Access (admin + inside subfolder)
+    // - Upload File (always)
+    // Layout: wrap into two rows if too many buttons to avoid overflow
+    final List<Widget> buttons = [];
+
+    if (hasFiles)
+      buttons.add(_outlineBtn(
+        icon: Icons.check_box_outlined,
+        label: 'Select Files',
+        onTap: onSelectFiles,
+      ));
+
+    if (isAdmin)
+      buttons.add(_outlineBtn(
+        icon: Icons.create_new_folder_outlined,
+        label: 'New Folder',
+        onTap: onNewFolder,
+      ));
+
+    if (isAdmin && isSubfolder && onShareFolder != null)
+      buttons.add(_outlineBtn(
+        icon: Icons.group_add_outlined,
+        label: 'Share Access',
+        onTap: onShareFolder!,
+      ));
+
+    // Upload is always last and always shown
+    final uploadBtn = Expanded(
+      child: ElevatedButton.icon(
+        onPressed: onUpload,
+        icon: const Icon(Icons.upload_rounded, size: 16, color: Colors.white),
+        label: const Text('Upload File',
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _kPrimary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+        ),
+      ),
+    );
+
+    // If 3 or more outline buttons, split into two rows
+    if (buttons.length >= 3) {
+      return Container(
+        color: _kBackground,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                for (int i = 0; i < buttons.length; i++) ...[
+                  buttons[i],
+                  if (i < buttons.length - 1) const SizedBox(width: 8),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(children: [uploadBtn]),
+          ],
+        ),
+      );
+    }
+
+    // Default: single row
     return Container(
       color: _kBackground,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
-          // Select Files button — visible when there are files
-          if (hasFiles) ...[
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onSelectFiles,
-                icon: const Icon(Icons.check_box_outlined,
-                    size: 16, color: _kPrimary),
-                label: const Text('Select Files',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _kPrimary)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: _kOrangeBorder),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  backgroundColor: _kPrimaryLight,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
+          for (int i = 0; i < buttons.length; i++) ...[
+            buttons[i],
+            const SizedBox(width: 8),
           ],
-          // New Subfolder — admin only
-          if (isAdmin) ...[
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onNewFolder,
-                icon: const Icon(Icons.create_new_folder_outlined,
-                    size: 16, color: _kPrimary),
-                label: const Text('New Folder',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _kPrimary)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: _kOrangeBorder),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  backgroundColor: _kPrimaryLight,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
-          // Upload — available to all users (admin + member)
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: onUpload,
-              icon: const Icon(Icons.upload_rounded,
-                  size: 16, color: Colors.white),
-              label: const Text('Upload File',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _kPrimary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-            ),
-          ),
+          uploadBtn,
         ],
+      ),
+    );
+  }
+
+  Widget _outlineBtn({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 15, color: _kPrimary),
+        label: Text(label,
+            style: const TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w600, color: _kPrimary)),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: _kOrangeBorder),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          backgroundColor: _kPrimaryLight,
+        ),
       ),
     );
   }
 }
 
-// ─── Tab bar ──────────────────────────────────────────────────────────────────
+// --- Tab bar ------------------------------------------------------------------
 
 class _FolderTabBar extends StatelessWidget {
   final TabController controller;
@@ -814,7 +756,7 @@ class _FolderTabBar extends StatelessWidget {
   }
 }
 
-// ─── Files tab ────────────────────────────────────────────────────────────────
+// --- Files tab ----------------------------------------------------------------
 
 class _FilesTab extends ConsumerWidget {
   final FolderViewState state;
@@ -903,19 +845,23 @@ class _FilesTab extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
-          // ── Subfolders ───────────────────────────────────────────
+          // -- Subfolders -------------------------------------------
           if (state.subfolders.isNotEmpty) ...[
             _SectionLabel(
                 label: 'Folders',
                 count: state.subfolders.length),
             const SizedBox(height: 8),
             ...state.subfolders.map(
-              (f) => _FolderTile(folder: f, onTap: () => onFolderTap(f)),
+              (f) => _FolderTile(
+                folder: f,
+                projectId: args.projectId,
+                onTap: () => onFolderTap(f),
+              ),
             ),
             const SizedBox(height: 20),
           ],
 
-          // ── Files ────────────────────────────────────────────────
+          // -- Files ------------------------------------------------
           if (state.files.isNotEmpty) ...[
             _SectionLabel(
                 label: 'Files', count: state.files.length),
@@ -946,6 +892,8 @@ class _FilesTab extends ConsumerWidget {
                           .read(folderViewProvider(args).notifier)
                           .toggleFileSelection(file.id);
                     }
+                    // Normal tap (not selection mode) → open file inline
+                    // Handled inside _FileCard.build via GestureDetector
                   },
                   onLongPress: () {
                     if (!state.isSelectionMode) {
@@ -965,7 +913,7 @@ class _FilesTab extends ConsumerWidget {
   }
 }
 
-// ─── Section label ────────────────────────────────────────────────────────────
+// --- Section label ------------------------------------------------------------
 
 class _SectionLabel extends StatelessWidget {
   final String label;
@@ -1000,15 +948,21 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ─── Folder tile ──────────────────────────────────────────────────────────────
+// --- Folder tile --------------------------------------------------------------
 
-class _FolderTile extends StatelessWidget {
+class _FolderTile extends ConsumerWidget {
   final FolderModel folder;
+  final String projectId;
   final VoidCallback onTap;
-  const _FolderTile({required this.folder, required this.onTap});
+
+  const _FolderTile({
+    required this.folder,
+    required this.projectId,
+    required this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1050,16 +1004,14 @@ class _FolderTile extends StatelessWidget {
                           color: _kTextDark),
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
-                  Text(
+                  const Text(
                     'Tap to open',
-                    style: const TextStyle(
-                        fontSize: 11, color: _kTextGrey),
+                    style: TextStyle(fontSize: 11, color: _kTextGrey),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
-                color: _kTextGrey, size: 20),
+            const Icon(Icons.chevron_right, color: _kTextGrey, size: 20),
           ],
         ),
       ),
@@ -1067,7 +1019,7 @@ class _FolderTile extends StatelessWidget {
   }
 }
 
-// ─── File card ────────────────────────────────────────────────────────────────
+// --- File card ----------------------------------------------------------------
 
 class _FileCard extends ConsumerWidget {
   final FileModel file;
@@ -1135,41 +1087,91 @@ class _FileCard extends ConsumerWidget {
 
   Future<void> _downloadFile(BuildContext context, WidgetRef ref, String projectId) async {
     try {
+      // Show loading indicator
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Downloading ${file.name}...'),
-          duration: const Duration(seconds: 1),
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Text('Opening ${file.name}�'),
+            ],
+          ),
+          duration: const Duration(seconds: 10),
           backgroundColor: _kPrimary,
         ),
       );
 
-      await FolderService().downloadFile(
+      // Fetch file bytes from the /open endpoint (inline, not attachment)
+      final response = await FolderService().downloadFile(
         projectId: projectId,
         fileId: file.id,
       );
 
-      // Save file to device
-      // Note: You'll need to add path_provider and permission_handler packages
-      // For now, just show success message
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File downloaded successfully'),
-            backgroundColor: Color(0xFF2E7D32),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+
+      // Write bytes to a temp file and open with the system viewer
+      final bytes = response.data as List<int>;
+      final tempDir = await _getTempDir();
+      final tempFile = File('${tempDir.path}/${file.name}');
+      await tempFile.writeAsBytes(bytes);
+
+      final result = await OpenFile.open(tempFile.path, type: file.mimeType);
+
+      if (result.type != ResultType.done && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Download failed: ${e.toString()}'),
-            backgroundColor: Colors.red.shade700,
+            content: Text('Cannot open this file type: ${file.name}'),
+            backgroundColor: Colors.orange.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
+    } on DioException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      final msg = e.response?.statusCode == 404
+          ? 'File no longer exists on server.'
+          : e.response?.statusCode == 403
+              ? 'You do not have access to this file.'
+              : 'Failed to open file. Check your connection.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not open ${file.name}'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
     }
   }
+
+  Future<Directory> _getTempDir() async {
+    final dir = Directory('/data/user/0/${_packageName()}/cache/vault_open');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  String _packageName() => 'com.filevault.file_vault_app';
 
   Future<void> _deleteFile(BuildContext context, WidgetRef ref, String projectId, FolderViewArgs args) async {
     final confirmed = await showDialog<bool>(
@@ -1231,7 +1233,9 @@ class _FileCard extends ConsumerWidget {
     final isAdmin = authUser?.isMasterAdmin ?? false;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: isSelectionMode
+          ? onTap  // selection mode → toggle selection
+          : () => _downloadFile(context, ref, projectId),  // normal mode → open file
       onLongPress: isSelectionMode ? null : onLongPress,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -1254,7 +1258,7 @@ class _FileCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Icon row ─────────────────────────────────────────
+            // -- Icon row -----------------------------------------
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1296,7 +1300,7 @@ class _FileCard extends ConsumerWidget {
                     onSelected: (value) {
                       if (value == 'open' || value == 'download') {
                         _downloadFile(context, ref, projectId);
-                      } else if (value == 'delete' && isAdmin) {
+                      } else if (value == 'delete' && (isAdmin || authUser?.name == file.owner)) {
                         _deleteFile(context, ref, projectId, args);
                       }
                     },
@@ -1321,7 +1325,7 @@ class _FileCard extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      if (isAdmin) ...[
+                      if (isAdmin || authUser?.name == file.owner) ...[
                         const PopupMenuDivider(),
                         const PopupMenuItem(
                           value: 'delete',
@@ -1339,7 +1343,7 @@ class _FileCard extends ConsumerWidget {
               ],
             ),
             const Spacer(),
-            // ── File name ────────────────────────────────────────
+            // -- File name ----------------------------------------
             Text(
               file.name,
               style: const TextStyle(
@@ -1351,7 +1355,7 @@ class _FileCard extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 6),
-            // ── Meta row with owner avatar ──────────────────────
+            // -- Meta row with owner avatar ----------------------
             Row(
               children: [
                 Expanded(
@@ -1412,7 +1416,7 @@ class _FileCard extends ConsumerWidget {
   }
 }
 
-// ─── Member avatars ───────────────────────────────────────────────────────────
+// --- Member avatars -----------------------------------------------------------
 
 class _MemberAvatars extends ConsumerStatefulWidget {
   final String projectId;
@@ -1473,7 +1477,7 @@ class _MemberAvatarsState extends ConsumerState<_MemberAvatars> {
   }
 }
 
-// ─── Create folder bottom sheet ───────────────────────────────────────────────
+// --- Create folder bottom sheet -----------------------------------------------
 
 class _CreateFolderSheet extends StatefulWidget {
   final Future<void> Function(String name) onConfirm;
@@ -1668,7 +1672,7 @@ class _CreateFolderSheetState extends State<_CreateFolderSheet> {
   }
 }
 
-// ─── Share modal ──────────────────────────────────────────────────────────────
+// --- Share modal --------------------------------------------------------------
 
 class _ShareModal extends ConsumerStatefulWidget {
   final String projectId;
@@ -1813,7 +1817,7 @@ class _ShareModalState extends ConsumerState<_ShareModal> {
               controller: _searchCtrl,
               style: const TextStyle(fontSize: 14, color: _kTextDark),
               decoration: InputDecoration(
-                hintText: 'Search by name or email…',
+                hintText: 'Search by name or email�',
                 hintStyle: const TextStyle(
                     color: _kTextGrey, fontSize: 14),
                 prefixIcon: const Icon(Icons.search,
@@ -1984,13 +1988,14 @@ class _ShareModalState extends ConsumerState<_ShareModal> {
   }
 }
 
-// ─── Chat tab (folder-scoped) ─────────────────────────────────────────────────
+// --- Chat tab (folder-scoped) -------------------------------------------------
 // Messages are strictly isolated per folderId.
 // This widget is intentionally named _ChatPlaceholder to avoid changing
-// the call-site in FolderScreen.build — it is now the real implementation.
+// the call-site in FolderScreen.build � it is now the real implementation.
 
-// ─── Folder access modal (admin grants/revokes per-folder user access) ────────
-// Having access to one subfolder does NOT grant access to sibling folders.
+// --- Folder access modal -----------------------------------------------------
+// Shows ALL users in the system as a checklist.
+// Checked = has access. Admin taps to toggle add/remove. Instant feedback.
 
 class _FolderAccessModal extends ConsumerStatefulWidget {
   final String projectId;
@@ -2006,19 +2011,15 @@ class _FolderAccessModal extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_FolderAccessModal> createState() =>
-      _FolderAccessModalState();
+  ConsumerState<_FolderAccessModal> createState() => _FolderAccessModalState();
 }
 
 class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
-  // Users who currently have access to this folder
-  List<ProjectMember> _withAccess = [];
-  // All project members (to add from)
-  List<ProjectMember> _allMembers = [];
-  List<ProjectMember> _filtered   = [];
+  List<ProjectMember> _allUsers = [];
+  List<ProjectMember> _filtered = [];
+  Set<String> _accessSet        = {};  // userIds who currently have access
   final _searchCtrl = TextEditingController();
   bool _isLoading   = true;
-  bool _isBusy      = false;
 
   @override
   void initState() {
@@ -2037,12 +2038,10 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
     final q = _searchCtrl.text.toLowerCase();
     setState(() {
       _filtered = q.isEmpty
-          ? _allMembers
-          : _allMembers
-              .where((m) =>
-                  m.name.toLowerCase().contains(q) ||
-                  m.email.toLowerCase().contains(q))
-              .toList();
+          ? _allUsers
+          : _allUsers.where((u) =>
+              u.name.toLowerCase().contains(q) ||
+              u.email.toLowerCase().contains(q)).toList();
     });
   }
 
@@ -2051,15 +2050,15 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
     try {
       final service = FolderService();
       final results = await Future.wait([
+        service.getAllUsers(),
         service.getFolderAccessList(widget.folderId),
-        service.getProjectMembers(widget.projectId),
       ]);
       if (mounted) {
         setState(() {
-          _withAccess = results[0];
-          _allMembers = results[1];
-          _filtered   = results[1];
-          _isLoading  = false;
+          _allUsers  = results[0];
+          _filtered  = results[0];
+          _accessSet = results[1].map((m) => m.userId).toSet();
+          _isLoading = false;
         });
       }
     } catch (_) {
@@ -2067,38 +2066,50 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
     }
   }
 
-  bool _hasAccess(String userId) =>
-      _withAccess.any((m) => m.userId == userId);
+  // Optimistic toggle � checkbox flips instantly, API fires in background.
+  // No spinner, no blocking. If API fails, checkbox reverts with a toast.
+  void _toggle(ProjectMember user) {
+    final hadAccess = _accessSet.contains(user.userId);
 
-  Future<void> _toggle(ProjectMember member) async {
-    if (_isBusy) return;
-    setState(() => _isBusy = true);
-    try {
-      final service = FolderService();
-      if (_hasAccess(member.userId)) {
-        await service.revokeFolderAccess(
-            folderId: widget.folderId, userId: member.userId);
-        setState(() =>
-            _withAccess.removeWhere((m) => m.userId == member.userId));
+    // Flip immediately so the user sees instant feedback
+    setState(() {
+      if (hadAccess) {
+        _accessSet.remove(user.userId);
       } else {
-        await service.grantFolderAccess(
-            folderId: widget.folderId, userId: member.userId);
-        setState(() => _withAccess.add(member));
+        _accessSet.add(user.userId);
       }
-    } catch (_) {
+    });
+
+    // Fire API in background
+    final service = FolderService();
+    final future = hadAccess
+        ? service.revokeFolderAccess(
+            folderId: widget.folderId, userId: user.userId)
+        : service.grantFolderAccess(
+            folderId: widget.folderId, userId: user.userId);
+
+    future.catchError((_) {
+      // Revert on failure
       if (mounted) {
+        setState(() {
+          if (hadAccess) {
+            _accessSet.add(user.userId);
+          } else {
+            _accessSet.remove(user.userId);
+          }
+        });
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Failed to update access. Try again.'),
+          content: Text('Failed to update access. Please try again.'),
           behavior: SnackBarBehavior.floating,
         ));
       }
-    } finally {
-      if (mounted) setState(() => _isBusy = false);
-    }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final accessCount = _accessSet.length;
+
     return Container(
       decoration: const BoxDecoration(
         color: _kBackground,
@@ -2109,37 +2120,36 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
+          // -- Handle ------------------------------------------------
           Container(
             margin: const EdgeInsets.only(top: 10),
-            width: 40,
-            height: 4,
+            width: 40, height: 4,
             decoration: BoxDecoration(
               color: Colors.grey.shade300,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // Header
+
+          // -- Header ------------------------------------------------
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 40, height: 40,
                   decoration: BoxDecoration(
                     color: _kPrimaryLight,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.folder_shared_outlined,
-                      color: _kPrimary, size: 18),
+                  child: const Icon(Icons.group_add_outlined,
+                      color: _kPrimary, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Share Access',
+                      const Text('Share Folder Access',
                           style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -2166,44 +2176,46 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          // Info banner
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: _kPrimaryLight,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
+
+          // -- Access count badge ------------------------------------
+          if (!_isLoading)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: _kPrimary, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: accessCount > 0 ? _kPrimaryLight : _kSurface,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     child: Text(
-                      'Access to this folder is independent. Users won\'t see other folders.',
+                      accessCount == 0
+                          ? 'No users have access'
+                          : '$accessCount user${accessCount > 1 ? 's' : ''} have access',
                       style: TextStyle(
-                          fontSize: 11,
-                          color: _kPrimary,
-                          height: 1.4),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: accessCount > 0 ? _kPrimary : _kTextGrey,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+
           const SizedBox(height: 10),
-          // Search
+
+          // -- Search ------------------------------------------------
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: TextField(
               controller: _searchCtrl,
               style: const TextStyle(fontSize: 14, color: _kTextDark),
               decoration: InputDecoration(
-                hintText: 'Search members…',
-                hintStyle:
-                    const TextStyle(color: _kTextGrey, fontSize: 14),
+                hintText: 'Search users by name or email�',
+                hintStyle: const TextStyle(color: _kTextGrey, fontSize: 14),
                 prefixIcon: const Icon(Icons.search,
                     color: _kTextGrey, size: 20),
                 filled: true,
@@ -2228,23 +2240,23 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
           ),
           const SizedBox(height: 8),
           const Divider(height: 1),
-          // Member list
+
+          // -- User list ---------------------------------------------
           ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.40,
+              maxHeight: MediaQuery.of(context).size.height * 0.45,
             ),
             child: _isLoading
                 ? const Padding(
-                    padding: EdgeInsets.all(32),
+                    padding: EdgeInsets.all(40),
                     child: Center(
-                        child: CircularProgressIndicator(
-                            color: _kPrimary)),
+                        child: CircularProgressIndicator(color: _kPrimary)),
                   )
                 : _filtered.isEmpty
                     ? const Padding(
-                        padding: EdgeInsets.all(32),
+                        padding: EdgeInsets.all(40),
                         child: Center(
-                          child: Text('No project members found.',
+                          child: Text('No users found.',
                               style: TextStyle(
                                   color: _kTextGrey, fontSize: 14)),
                         ),
@@ -2253,49 +2265,45 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
                         shrinkWrap: true,
                         itemCount: _filtered.length,
                         itemBuilder: (context, i) {
-                          final m = _filtered[i];
-                          final hasAccess = _hasAccess(m.userId);
+                          final u = _filtered[i];
+                          final hasAccess = _accessSet.contains(u.userId);
+
                           return ListTile(
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                                    horizontal: 20, vertical: 2),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 4),
                             leading: CircleAvatar(
-                              backgroundColor: _avatarColor(m.name),
-                              radius: 20,
-                              child: Text(m.initials,
+                              backgroundColor: _avatarColor(u.name),
+                              radius: 22,
+                              child: Text(u.initials,
                                   style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700)),
                             ),
-                            title: Text(m.name,
+                            title: Text(u.name,
                                 style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color: _kTextDark)),
-                            subtitle: Text(m.email,
+                            subtitle: Text(u.email,
                                 style: const TextStyle(
-                                    fontSize: 12,
-                                    color: _kTextGrey)),
-                            trailing: _isBusy
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: _kPrimary),
-                                  )
-                                : Switch(
-                                    value: hasAccess,
-                                    activeTrackColor: _kPrimary,
-                                    onChanged: (_) => _toggle(m),
-                                  ),
-                            onTap: _isBusy ? null : () => _toggle(m),
+                                    fontSize: 12, color: _kTextGrey)),
+                            trailing: Checkbox(
+                              value: hasAccess,
+                              activeColor: _kPrimary,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4)),
+                              onChanged: (_) => _toggle(u),
+                            ),
+                            onTap: () => _toggle(u),
                           );
                         },
                       ),
           ),
+
           const Divider(height: 1),
+
+          // -- Done button -------------------------------------------
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             child: SizedBox(
@@ -2415,11 +2423,11 @@ class _ChatPlaceholderState extends ConsumerState<_ChatPlaceholder> {
     final picked = result.files.first;
     if (picked.path == null) return;
 
-    // We need projectId — read from the parent FolderScreen widget.
+    // We need projectId � read from the parent FolderScreen widget.
     // Since we can't access widget.projectId directly here, we use a
     // workaround: the FolderService upload requires projectId.
     // The chat attach flow uploads to the folder's project.
-    // For now we show a toast — full wiring requires projectId passed down.
+    // For now we show a toast � full wiring requires projectId passed down.
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text('Upload via the Files tab, then attach from chat.'),
@@ -2438,7 +2446,7 @@ class _ChatPlaceholderState extends ConsumerState<_ChatPlaceholder> {
 
     return Column(
       children: [
-        // ── Message list ───────────────────────────────────────────
+        // -- Message list -------------------------------------------
         Expanded(
           child: chatState.isLoading
               ? const Center(
@@ -2475,7 +2483,7 @@ class _ChatPlaceholderState extends ConsumerState<_ChatPlaceholder> {
                     ),
         ),
 
-        // ── Error banner ───────────────────────────────────────────
+        // -- Error banner -------------------------------------------
         if (chatState.errorMessage != null)
           Container(
             width: double.infinity,
@@ -2503,7 +2511,7 @@ class _ChatPlaceholderState extends ConsumerState<_ChatPlaceholder> {
             ),
           ),
 
-        // ── Composer ───────────────────────────────────────────────
+        // -- Composer -----------------------------------------------
         _ChatComposer(
           controller: _textCtrl,
           focusNode: _focusNode,
@@ -2515,11 +2523,14 @@ class _ChatPlaceholderState extends ConsumerState<_ChatPlaceholder> {
     );
   }
 
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
+  bool _sameDay(DateTime a, DateTime b) {
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+  }
 }
 
-// ─── Chat empty state ─────────────────────────────────────────────────────────
+// --- Chat empty state ---------------------------------------------------------
 
 class _ChatEmptyState extends StatelessWidget {
   @override
@@ -2560,19 +2571,21 @@ class _ChatEmptyState extends StatelessWidget {
   }
 }
 
-// ─── Date separator ───────────────────────────────────────────────────────────
+// --- Date separator -----------------------------------------------------------
 
 class _DateSeparator extends StatelessWidget {
   final DateTime date;
   const _DateSeparator({required this.date});
 
   String get _label {
-    final now = DateTime.now();
+    final now   = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final d     = DateTime(date.year, date.month, date.day);
+    // Convert UTC timestamp to local time before comparing dates
+    final local = date.toLocal();
+    final d     = DateTime(local.year, local.month, local.day);
     if (d == today) return 'TODAY';
     if (d == today.subtract(const Duration(days: 1))) return 'YESTERDAY';
-    return '${date.day} ${_month(date.month)} ${date.year}';
+    return '${local.day} ${_month(local.month)} ${local.year}';
   }
 
   String _month(int m) => const [
@@ -2612,7 +2625,7 @@ class _DateSeparator extends StatelessWidget {
   }
 }
 
-// ─── System message ───────────────────────────────────────────────────────────
+// --- System message -----------------------------------------------------------
 
 class _SystemMessage extends StatelessWidget {
   final ChatMessage message;
@@ -2642,7 +2655,7 @@ class _SystemMessage extends StatelessWidget {
   }
 }
 
-// ─── Chat bubble ──────────────────────────────────────────────────────────────
+// --- Chat bubble --------------------------------------------------------------
 
 class _ChatBubble extends StatelessWidget {
   final ChatMessage message;
@@ -2658,7 +2671,7 @@ class _ChatBubble extends StatelessWidget {
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Sender avatar — incoming only
+          // Sender avatar � incoming only
           if (!isMe) ...[
             CircleAvatar(
               radius: 16,
@@ -2679,7 +2692,7 @@ class _ChatBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                // Sender name — incoming only
+                // Sender name � incoming only
                 if (!isMe)
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 3),
@@ -2751,7 +2764,7 @@ class _ChatBubble extends StatelessWidget {
   }
 }
 
-// ─── Attachment preview (inside bubble) ──────────────────────────────────────
+// --- Attachment preview (inside bubble) --------------------------------------
 
 class _AttachmentPreview extends StatelessWidget {
   final ChatAttachment attachment;
@@ -2823,7 +2836,7 @@ class _AttachmentPreview extends StatelessWidget {
   }
 }
 
-// ─── Chat composer ────────────────────────────────────────────────────────────
+// --- Chat composer ------------------------------------------------------------
 
 class _ChatComposer extends StatelessWidget {
   final TextEditingController controller;
@@ -2894,7 +2907,7 @@ class _ChatComposer extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 14, color: _kTextDark),
                 decoration: const InputDecoration.collapsed(
-                  hintText: 'Type your message…',
+                  hintText: 'Type your message�',
                   hintStyle: TextStyle(
                       color: _kTextGrey, fontSize: 14),
                 ),
@@ -2933,7 +2946,7 @@ class _ChatComposer extends StatelessWidget {
   }
 }
 
-// ─── Attach file sheet ────────────────────────────────────────────────────────
+// --- Attach file sheet --------------------------------------------------------
 
 class _AttachFileSheet extends StatelessWidget {
   final List<FileModel> files;
@@ -3092,3 +3105,4 @@ class _AttachFileSheet extends StatelessWidget {
     }
   }
 }
+

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_vault_app/core/api/api_client.dart';
 import 'package:file_vault_app/core/utils/secure_storage.dart';
+import 'package:file_vault_app/features/auth/auth_model.dart';
 import 'package:file_vault_app/features/auth/auth_service.dart';
 import 'package:file_vault_app/features/auth/auth_state.dart';
 
@@ -38,8 +39,9 @@ class AuthNotifier extends Notifier<AuthState> {
         password: password,
       );
 
-      // Persist token to secure storage (Keychain / Keystore).
+      // Persist token and user to secure storage.
       await SecureStorage.saveToken(token);
+      await SecureStorage.saveUser(user);
 
       // Attach token to every subsequent Dio request.
       ApiClient.setToken(token);
@@ -60,18 +62,38 @@ class AuthNotifier extends Notifier<AuthState> {
   // Restore session on app start
   // ---------------------------------------------------------------------------
 
-  /// Reads the stored token from secure storage.
-  /// If found, re-attaches it to Dio so API calls work without re-login.
-  /// Does NOT validate the token against the backend — that happens lazily
-  /// on the first protected API call (401 will redirect to login).
+  /// Reads the stored token, re-attaches it to Dio, then fetches the current
+  /// user profile from the backend so the user object is always populated.
   Future<void> restoreSession() async {
     final token = await SecureStorage.readToken();
-    if (token != null) {
-      ApiClient.setToken(token);
-      // We have a token but no user object — mark as authenticated with
-      // token only. The user object will be populated on the first API call
-      // that returns user data, or on next login.
-      state = AuthState(token: token);
+    if (token == null) return;
+
+    ApiClient.setToken(token);
+
+    // Load cached user immediately — no network needed.
+    // This ensures correct name/role/avatar on startup even if offline.
+    final cachedUser = await SecureStorage.readUser();
+    state = AuthState(token: token, user: cachedUser);
+
+    // Then refresh from backend in background to pick up any profile changes.
+    try {
+      final res = await ApiClient.instance.get('/auth/me');
+      final freshUser = AuthUser.fromJson(
+        res.data['data']['user'] as Map<String, dynamic>,
+      );
+      // Update cache and state with fresh data
+      await SecureStorage.saveUser(freshUser);
+      state = AuthState(token: token, user: freshUser);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        // Token expired — force re-login
+        await SecureStorage.clearAll();
+        ApiClient.clearToken();
+        state = const AuthState();
+      }
+      // Network error — cached user is already set, app works normally
+    } catch (_) {
+      // Non-critical — cached user already in state
     }
   }
 
@@ -80,14 +102,34 @@ class AuthNotifier extends Notifier<AuthState> {
   // ---------------------------------------------------------------------------
 
   Future<void> logout() async {
-    await SecureStorage.deleteToken();
+    await SecureStorage.clearAll();
     ApiClient.clearToken();
     state = const AuthState();
   }
 
   // ---------------------------------------------------------------------------
-  // Clear error (called when user starts typing again)
+  // Update profile (name) — any authenticated user, no admin required
   // ---------------------------------------------------------------------------
+
+  Future<String?> updateProfile({ required String name }) async {
+    if (name.trim().isEmpty) return 'Name cannot be empty';
+    try {
+      final dio = ApiClient.instance;
+      final res = await dio.patch('/auth/profile', data: { 'name': name.trim() });
+      final updatedUser = AuthUser.fromJson(
+        res.data['data']['user'] as Map<String, dynamic>,
+      );
+      // Update state with new name, keep token
+      state = state.copyWith(user: updatedUser);
+      await SecureStorage.saveUser(updatedUser);
+      return null;
+    } on DioException catch (e) {
+      final msg = e.response?.data?['error']?['message'] as String?;
+      return msg ?? 'Failed to update profile.';
+    } catch (_) {
+      return 'An unexpected error occurred.';
+    }
+  }
 
   void clearError() {
     state = state.copyWith(clearError: true);

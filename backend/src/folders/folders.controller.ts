@@ -43,7 +43,17 @@ export class FoldersController {
         ],
       },
     });
-    return accessibleFile !== null;
+    if (accessibleFile) return true;
+
+    // Deep check: Is any ancestor explicitly shared?
+    try {
+      const folder = await this.prisma.folder.findUnique({ where: { id: folderId } });
+      if (!folder) return false;
+      const accessibleIds = await this.getAccessibleFolderIds(folder.projectId, userId);
+      return accessibleIds.has(folderId);
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -74,12 +84,59 @@ export class FoldersController {
     });
 
     const ids = new Set<string>();
+    const explicitIds = new Set<string>();
 
     for (const row of folderAccessRows) {
       ids.add(row.folderId);
+      explicitIds.add(row.folderId);
     }
+    
+    const implicitIds = new Set<string>();
     for (const f of accessibleFiles) {
-      if (f.folderId) ids.add(f.folderId);
+      if (f.folderId) {
+        ids.add(f.folderId);
+        implicitIds.add(f.folderId);
+      }
+    }
+
+    try {
+      const allFolders = await this.prisma.folder.findMany({
+        where: { projectId },
+        select: { id: true, parentId: true },
+      });
+      
+      const folderTree = new Map<string, string[]>();
+      const parentMap = new Map<string, string>();
+      
+      for (const f of allFolders) {
+        if (f.parentId) {
+          if (!folderTree.has(f.parentId)) folderTree.set(f.parentId, []);
+          folderTree.get(f.parentId)!.push(f.id);
+          parentMap.set(f.id, f.parentId);
+        }
+      }
+      
+      const queue = Array.from(explicitIds);
+      while (queue.length > 0) {
+        const curr = queue.shift()!;
+        const children = folderTree.get(curr) || [];
+        for (const child of children) {
+          if (!ids.has(child)) {
+            ids.add(child);
+            queue.push(child);
+          }
+        }
+      }
+      
+      for (const impId of implicitIds) {
+        let curr = parentMap.get(impId);
+        while (curr && !ids.has(curr)) {
+          ids.add(curr);
+          curr = parentMap.get(curr);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to resolve folder tree', err);
     }
 
     return ids;

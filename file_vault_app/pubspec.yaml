@@ -23,8 +23,14 @@ dependencies:
   file_picker: ^8.1.7
   
   # Receive shared files from other apps
-  # TEMPORARILY DISABLED: Plugin has Kotlin compilation issues
-  # receive_sharing_intent: ^1.8.0
+  receive_sharing_intent: ^1.8.0
+
+  # Open files inline (PDF, images, docs)
+  open_file: ^3.3.2
+  url_launcher: ^6.3.1
+
+  # Temp directory for resolving content:// URIs from share intents
+  path_provider: ^2.1.4
 
   # Date formatting
   intl: ^0.19.0

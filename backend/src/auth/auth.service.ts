@@ -14,9 +14,10 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return null;
 
-    // For dev: skip proper bcrypt hash check if password is 'password123'
-    // Ensure you replace this logic later with secure comparisons!
-    const isMatch = pass === user.password || await bcrypt.compare(pass, user.password).catch(() => false);
+// ─── auth.service.ts — SECURITY BUG: plain-text password comparison removed ──
+// The `pass === user.password` check allows plain-text passwords in production.
+// Only bcrypt.compare should be used.
+    const isMatch = await bcrypt.compare(pass, user.password).catch(() => false);
     
     if (isMatch) {
       const { password, ...result } = user;

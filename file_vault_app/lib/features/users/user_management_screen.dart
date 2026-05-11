@@ -286,10 +286,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       backgroundColor: _kBackground,
       elevation: 0,
       scrolledUnderElevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.menu, color: _kPrimary),
-        onPressed: () {},
-      ),
+      automaticallyImplyLeading: false,
       title: const Text(
         'File Vault',
         style: TextStyle(
@@ -1074,7 +1071,7 @@ class _BottomNav extends StatelessWidget {
               ),
               _NavItem(
                 icon: Icons.person_add_alt_1_rounded,
-                label: 'CREATE USERS',
+                label: 'USERS',
                 isActive: selectedIndex == 1,
                 onTap: () => onTap(1),
               ),

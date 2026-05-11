@@ -73,11 +73,15 @@ class ChatMessage {
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
-  /// Formatted time string (HH:MM).
+  /// Formatted time string in IST (HH:MM AM/PM).
   String get timeLabel {
-    final h = createdAt.hour.toString().padLeft(2, '0');
-    final m = createdAt.minute.toString().padLeft(2, '0');
-    return '$h:$m';
+    // Backend sends UTC ISO string. Convert to device local time (IST = UTC+5:30).
+    final local = createdAt.toLocal();
+    final hour   = local.hour;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final h12    = hour % 12 == 0 ? 12 : hour % 12;
+    return '$h12:$minute $period';
   }
 }
 

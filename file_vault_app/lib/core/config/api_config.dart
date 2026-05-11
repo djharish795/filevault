@@ -25,21 +25,22 @@ class ApiConfig {
   static const String projectsAccessible = '/projects/accessible';
   
   static const String folders = '/folders';
-  static String folderRoot(String projectId) => '/folders/$projectId/root';
+  static String folderRoot(String projectId) => '/folders/root/$projectId';
   static String folderChildren(String folderId) => '/folders/$folderId/children';
-  static String folderUpload(String projectId) => '/folders/$projectId/upload';
+  static String folderUpload(String projectId) => '/projects/$projectId/files/upload';
   
   static const String files = '/files';
-  static String fileDownload(String fileId) => '/files/$fileId/download';
-  static String fileDelete(String fileId) => '/files/$fileId';
+  static String fileDownload(String projectId, String fileId) => '/projects/$projectId/files/$fileId/download';
+  static String fileOpen(String projectId, String fileId) => '/projects/$projectId/files/$fileId/open';
+  static String fileDelete(String projectId, String fileId) => '/projects/$projectId/files/$fileId';
   
   static const String sharing = '/sharing';
-  static String shareFile(String fileId) => '/sharing/files/$fileId/share';
-  static String unshareFile(String fileId) => '/sharing/files/$fileId/unshare';
+  static String shareFile(String projectId, String fileId) => '/projects/$projectId/sharing/files/$fileId/share';
+  static String unshareFile(String projectId, String fileId) => '/projects/$projectId/sharing/files/$fileId/share';
   
   static const String chat = '/chat';
-  static String chatMessages(String folderId) => '/chat/$folderId/messages';
-  static String chatSend(String folderId) => '/chat/$folderId/send';
+  static String chatMessages(String folderId) => '/folders/$folderId/messages';
+  static String chatSend(String folderId) => '/folders/$folderId/messages';
   
   static const String adminUsers = '/admin/users';
   static String adminUser(String userId) => '/admin/users/$userId';

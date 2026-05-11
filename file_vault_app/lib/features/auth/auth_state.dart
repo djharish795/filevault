@@ -14,7 +14,7 @@ class AuthState {
     this.errorMessage,
   });
 
-  bool get isAuthenticated => token != null && user != null;
+  bool get isAuthenticated => token != null;
 
   AuthState copyWith({
     AuthUser? user,

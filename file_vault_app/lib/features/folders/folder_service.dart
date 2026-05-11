@@ -72,6 +72,19 @@ class FolderService {
     await _dio.delete('/projects/$projectId/files/$fileId');
   }
 
+  // ── GET /projects/:projectId/files/:fileId/open — open inline ───────────────
+  Future<String> getFileOpenUrl({
+    required String projectId,
+    required String fileId,
+  }) async {
+    // Returns the full URL for inline viewing — used by url_launcher / open_file
+    final baseUrl = _dio.options.baseUrl.replaceAll(RegExp(r'/$'), '');
+    final token = _dio.options.headers['Authorization'] as String? ?? '';
+    // We return the URL; the caller opens it via url_launcher with the token
+    // embedded as a query param so the mobile viewer can authenticate.
+    return '$baseUrl/projects/$projectId/files/$fileId/open?token=${token.replaceAll('Bearer ', '')}';
+  }
+
   // ── GET /projects/:projectId/files/:fileId/download ─────────────────────────
   Future<Response> downloadFile({
     required String projectId,
