@@ -93,7 +93,7 @@ class _ShareSessionScreenState extends ConsumerState<ShareSessionScreen> {
             ? _allProjects
             : _allProjects.where((p) =>
                 p.name.toLowerCase().contains(q) ||
-                p.caseNumber.toLowerCase().contains(q)).toList();
+                (p.caseNumber?.toLowerCase().contains(q) ?? false)).toList();
       } else {
         _filteredFolders = q.isEmpty
             ? _allFolders
@@ -669,7 +669,7 @@ class _ProjectList extends StatelessWidget {
                               color: _kTextDark),
                           overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
-                      Text('Case #${p.caseNumber}',
+                      Text('Case ID: ${p.caseNumber?.isNotEmpty == true ? p.caseNumber : "N/A"}',
                           style: const TextStyle(fontSize: 11, color: _kTextGrey)),
                     ],
                   ),

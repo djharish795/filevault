@@ -366,6 +366,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         '/project/${project.id}',
                         extra: {'projectName': project.name},
                       ),
+                      onRename: () {
+                        _showRenameProjectDialog(project);
+                      },
                       onDelete: () async {
                         final confirmed = await showDialog<bool>(
                           context: context,
@@ -421,6 +424,62 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         },
       ),
     );
+  }
+
+  void _showRenameProjectDialog(dynamic project) {
+    final nameController = TextEditingController(text: project.name);
+    final caseController = TextEditingController(text: project.caseNumber ?? '');
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Project', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Project Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: caseController,
+              decoration: const InputDecoration(
+                labelText: 'Case Number (Optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.white),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    ).then((confirmed) async {
+      if (confirmed == true && nameController.text.trim().isNotEmpty) {
+        final newName = nameController.text.trim();
+        final newCase = caseController.text.trim();
+        if (newName == project.name && newCase == (project.caseNumber ?? '')) return;
+        
+        final err = await ref.read(projectListProvider.notifier).updateProject(project.id, newName, newCase);
+        if (err != null) {
+          _toast(err, isError: true);
+        } else {
+          _toast('Project updated successfully');
+        }
+      }
+    });
   }
 
   PreferredSizeWidget _buildAppBar(String? userName) {
@@ -659,11 +718,13 @@ class _RecentProjectsHeader extends StatelessWidget {
 class _ProjectCard extends StatelessWidget {
   final dynamic project; // ProjectModel
   final VoidCallback onTap;
+  final VoidCallback onRename;
   final VoidCallback onDelete;
 
   const _ProjectCard({
     required this.project,
     required this.onTap,
+    required this.onRename,
     required this.onDelete,
   });
 
@@ -711,9 +772,8 @@ class _ProjectCard extends StatelessWidget {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
                   Text(
-                    'Case ID: ${project.caseNumber}',
+                    'Case ID: ${project.caseNumber?.isNotEmpty == true ? project.caseNumber : "N/A"}',
                     style: const TextStyle(fontSize: 11, color: _kTextGrey),
                   ),
                 ],
@@ -734,9 +794,20 @@ class _ProjectCard extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
               onSelected: (value) {
+                if (value == 'rename') onRename();
                 if (value == 'delete') onDelete();
               },
               itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'rename',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_outlined, color: _kTextDark, size: 18),
+                      SizedBox(width: 8),
+                      Text('Rename', style: TextStyle(color: _kTextDark)),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(
                   value: 'delete',
                   child: Row(
@@ -950,9 +1021,8 @@ class _CreateProjectSheetState extends State<_CreateProjectSheet> {
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _submit(),
               style: const TextStyle(fontSize: 15, color: _kTextDark),
-              decoration: _inputDecoration('Case number (e.g. 8829-XJ-2024)', Icons.tag),
+              decoration: _inputDecoration('Case number (Optional)', Icons.tag),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Case number is required';
                 return null;
               },
             ),

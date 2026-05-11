@@ -159,4 +159,17 @@ class FolderService {
   }) async {
     await _dio.delete('/folders/$folderId/access/$userId');
   }
+
+  // ── PATCH /folders/:folderId — rename folder ──────────────────────────────────
+  Future<void> renameFolder({
+    required String folderId,
+    required String name,
+  }) async {
+    await _dio.patch('/folders/$folderId', data: {'name': name});
+  }
+
+  // ── DELETE /folders/:folderId — delete folder ─────────────────────────────────
+  Future<void> deleteFolder(String folderId) async {
+    await _dio.delete('/folders/$folderId');
+  }
 }

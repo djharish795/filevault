@@ -2,14 +2,14 @@
 class ProjectModel {
   final String id;
   final String name;
-  final String caseNumber;
+  final String? caseNumber;
   final int memberCount;
   final DateTime updatedAt;
 
   const ProjectModel({
     required this.id,
     required this.name,
-    required this.caseNumber,
+    this.caseNumber,
     required this.memberCount,
     required this.updatedAt,
   });
@@ -18,9 +18,25 @@ class ProjectModel {
     return ProjectModel(
       id: json['id'] as String,
       name: json['name'] as String,
-      caseNumber: json['caseNumber'] as String,
+      caseNumber: json['caseNumber'] as String?,
       memberCount: (json['memberCount'] as num?)?.toInt() ?? 0,
       updatedAt: DateTime.parse(json['updatedAt'] as String),
+    );
+  }
+
+  ProjectModel copyWith({
+    String? id,
+    String? name,
+    String? caseNumber,
+    int? memberCount,
+    DateTime? updatedAt,
+  }) {
+    return ProjectModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      caseNumber: caseNumber ?? this.caseNumber,
+      memberCount: memberCount ?? this.memberCount,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 

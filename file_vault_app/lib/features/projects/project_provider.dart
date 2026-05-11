@@ -62,7 +62,7 @@ class ProjectListNotifier extends Notifier<ProjectListState> {
 
   Future<String?> createProject({
     required String name,
-    required String caseNumber,
+    String? caseNumber,
   }) async {
     try {
       final project =
@@ -92,6 +92,29 @@ class ProjectListNotifier extends Notifier<ProjectListState> {
     } catch (_) {
       state = state.copyWith(projects: previous);
       return 'Failed to delete project.';
+    }
+  }
+
+  // ── Update project ───────────────────────────────────────────────────────────
+
+  Future<String?> updateProject(String projectId, String newName, [String? newCaseNumber]) async {
+    try {
+      await _service.updateProject(projectId, newName, newCaseNumber);
+      final updated = state.projects.map<ProjectModel>((p) {
+        if (p.id == projectId) {
+          return p.copyWith(
+            name: newName,
+            caseNumber: newCaseNumber?.trim().isNotEmpty == true ? newCaseNumber : p.caseNumber,
+          );
+        }
+        return p;
+      }).toList();
+      state = state.copyWith(projects: updated);
+      return null;
+    } on DioException catch (e) {
+      return _mapError(e);
+    } catch (_) {
+      return 'Failed to update project.';
     }
   }
 

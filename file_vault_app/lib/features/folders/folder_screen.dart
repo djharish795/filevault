@@ -855,6 +855,9 @@ class _FilesTab extends ConsumerWidget {
               (f) => _FolderTile(
                 folder: f,
                 projectId: args.projectId,
+                isAdmin: isAdmin,
+                isRoot: args.folderId == null,
+                args: args,
                 onTap: () => onFolderTap(f),
               ),
             ),
@@ -953,11 +956,17 @@ class _SectionLabel extends StatelessWidget {
 class _FolderTile extends ConsumerWidget {
   final FolderModel folder;
   final String projectId;
+  final bool isAdmin;
+  final bool isRoot;
+  final FolderViewArgs args;
   final VoidCallback onTap;
 
   const _FolderTile({
     required this.folder,
     required this.projectId,
+    required this.isAdmin,
+    required this.isRoot,
+    required this.args,
     required this.onTap,
   });
 
@@ -1011,11 +1020,112 @@ class _FolderTile extends ConsumerWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: _kTextGrey, size: 20),
+            if (isAdmin)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: _kTextGrey, size: 20),
+                onSelected: (val) {
+                  if (val == 'rename') {
+                    _showRenameFolderDialog(context, ref, folder, args);
+                  } else if (val == 'delete') {
+                    _showDeleteFolderDialog(context, ref, folder, args);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'rename',
+                    child: Text('Rename', style: TextStyle(fontSize: 13)),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete', style: TextStyle(fontSize: 13, color: Colors.red)),
+                  ),
+                ],
+              )
+            else
+              const Icon(Icons.chevron_right, color: _kTextGrey, size: 20),
           ],
         ),
       ),
     );
+  }
+}
+
+Future<void> _showRenameFolderDialog(BuildContext context, WidgetRef ref, FolderModel folder, FolderViewArgs args) async {
+  final nameController = TextEditingController(text: folder.name);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Rename Folder', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _kTextDark)),
+      content: TextField(
+        controller: nameController,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'New Folder Name',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel', style: TextStyle(color: _kTextGrey)),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.white),
+          child: const Text('Rename'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed == true && nameController.text.trim().isNotEmpty) {
+    final newName = nameController.text.trim();
+    if (newName == folder.name) return;
+
+    final err = await ref.read(folderViewProvider(args).notifier).renameFolder(folder.id, newName);
+    if (!context.mounted) return;
+
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: Colors.red));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Folder renamed')));
+    }
+  }
+}
+
+Future<void> _showDeleteFolderDialog(BuildContext context, WidgetRef ref, FolderModel folder, FolderViewArgs args) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete Folder', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _kTextDark)),
+      content: const Text(
+        'Are you sure you want to delete this folder?\n\n'
+        'WARNING: This is a huge folder with potentially many files. Deleting it will remove all contents inside it permanently.',
+        style: TextStyle(fontSize: 14, color: _kTextMid),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel', style: TextStyle(color: _kTextGrey)),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed == true) {
+    final err = await ref.read(folderViewProvider(args).notifier).deleteFolder(folder.id);
+    if (!context.mounted) return;
+
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: Colors.red));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Folder deleted')));
+    }
   }
 }
 

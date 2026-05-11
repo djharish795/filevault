@@ -18,11 +18,11 @@ class ProjectService {
   // ── POST /v1/projects — admin only ───────────────────────────────────────────
   Future<ProjectModel> createProject({
     required String name,
-    required String caseNumber,
+    String? caseNumber,
   }) async {
     final res = await _dio.post('/projects', data: {
       'name': name.trim(),
-      'caseNumber': caseNumber.trim(),
+      if (caseNumber != null && caseNumber.trim().isNotEmpty) 'caseNumber': caseNumber.trim(),
     });
     return ProjectModel.fromJson(res.data['data'] as Map<String, dynamic>);
   }
@@ -30,5 +30,12 @@ class ProjectService {
   // ── DELETE /v1/projects/:id — admin only ─────────────────────────────────────
   Future<void> deleteProject(String projectId) async {
     await _dio.delete('/projects/$projectId');
+  }
+
+  // ── PATCH /v1/projects/:id — admin only ──────────────────────────────────────
+  Future<void> updateProject(String projectId, String name, [String? caseNumber]) async {
+    final data = <String, dynamic>{'name': name};
+    if (caseNumber != null) data['caseNumber'] = caseNumber;
+    await _dio.patch('/projects/$projectId', data: data);
   }
 }

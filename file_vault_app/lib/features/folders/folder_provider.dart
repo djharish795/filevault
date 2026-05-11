@@ -108,6 +108,41 @@ class FolderViewNotifier
     }
   }
 
+  // ── Rename folder ───────────────────────────────────────────────────────────
+
+  Future<String?> renameFolder(String folderId, String newName) async {
+    try {
+      await _service.renameFolder(folderId: folderId, name: newName);
+      // Optimistic update
+      final updatedFolders = state.subfolders.map<FolderModel>((f) {
+        if (f.id == folderId) return f.copyWith(name: newName);
+        return f;
+      }).toList();
+      state = state.copyWith(subfolders: updatedFolders);
+      return null;
+    } on DioException catch (e) {
+      return _mapError(e);
+    } catch (_) {
+      return 'Failed to rename folder.';
+    }
+  }
+
+  // ── Delete folder ───────────────────────────────────────────────────────────
+
+  Future<String?> deleteFolder(String folderId) async {
+    try {
+      await _service.deleteFolder(folderId);
+      // Optimistic update
+      final updatedFolders = state.subfolders.where((f) => f.id != folderId).toList();
+      state = state.copyWith(subfolders: updatedFolders);
+      return null;
+    } on DioException catch (e) {
+      return _mapError(e);
+    } catch (_) {
+      return 'Failed to delete folder.';
+    }
+  }
+
   // ── File selection (multi-select) ───────────────────────────────────────────
 
   void enterSelectionMode() {

@@ -23,6 +23,22 @@ class FolderModel {
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
+
+  FolderModel copyWith({
+    String? id,
+    String? name,
+    String? projectId,
+    String? parentId,
+    DateTime? createdAt,
+  }) {
+    return FolderModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      projectId: projectId ?? this.projectId,
+      parentId: parentId ?? this.parentId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }
 
 /// Breadcrumb entry used for folder navigation trail.

@@ -9,7 +9,7 @@ export class ProjectsController {
 
   @Post()
   async createProject(
-    @Body() body: { name: string; caseNumber: string },
+    @Body() body: { name: string; caseNumber?: string },
     @Req() req: any,
   ) {
     const user = req.user;
@@ -21,9 +21,9 @@ export class ProjectsController {
       );
     }
 
-    if (!body.name?.trim() || !body.caseNumber?.trim()) {
+    if (!body.name?.trim()) {
       throw new HttpException(
-        { success: false, error: { code: 'BAD_REQUEST', message: 'Project name and case number are required' } },
+        { success: false, error: { code: 'BAD_REQUEST', message: 'Project name is required' } },
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -31,7 +31,7 @@ export class ProjectsController {
     const project = await this.prisma.project.create({
       data: {
         name: body.name.trim(),
-        caseNumber: body.caseNumber.trim(),
+        caseNumber: body.caseNumber?.trim() || null,
         members: {
           create: [{ userId: user.id } as any],
         },
@@ -239,7 +239,7 @@ export class ProjectsController {
       where: { id },
       data: {
         ...(body.name && { name: body.name.trim() }),
-        ...(body.caseNumber && { caseNumber: body.caseNumber.trim() }),
+        ...(body.caseNumber !== undefined && { caseNumber: body.caseNumber?.trim() || null }),
       },
       include: { _count: { select: { members: true } } },
     });

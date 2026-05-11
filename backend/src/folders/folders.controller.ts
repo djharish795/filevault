@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Delete, Param, Body, Req,
+  Controller, Get, Post, Delete, Patch, Param, Body, Req,
   UseGuards, HttpException, HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -493,5 +493,62 @@ export class FoldersController {
         },
       },
     };
+  }
+  // ─── PATCH /v1/folders/:folderId — rename folder ─────────────────────────────
+
+  @Patch(':folderId')
+  async renameFolder(
+    @Param('folderId') folderId: string,
+    @Body() body: { name: string },
+    @Req() req: any,
+  ) {
+    const user = req.user;
+    if (!user.isMasterAdmin) {
+      throw new HttpException(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only admin can rename folders' } },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    if (!body.name?.trim()) {
+      throw new HttpException(
+        { success: false, error: { code: 'BAD_REQUEST', message: 'Folder name is required' } },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const folder = await this.prisma.folder.findUnique({ where: { id: folderId } });
+    if (!folder) {
+      throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Folder not found' } }, HttpStatus.NOT_FOUND);
+    }
+    const updated = await this.prisma.folder.update({
+      where: { id: folderId },
+      data: { name: body.name.trim() },
+    });
+    return { success: true, data: updated };
+  }
+
+  // ─── DELETE /v1/folders/:folderId — delete folder ────────────────────────────
+
+  @Delete(':folderId')
+  async deleteFolder(
+    @Param('folderId') folderId: string,
+    @Req() req: any,
+  ) {
+    const user = req.user;
+    if (!user.isMasterAdmin) {
+      throw new HttpException(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only admin can delete folders' } },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    const folder = await this.prisma.folder.findUnique({ where: { id: folderId } });
+    if (!folder) {
+      throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Folder not found' } }, HttpStatus.NOT_FOUND);
+    }
+    
+    // Note: Due to cascade delete, this will remove child folders and file records.
+    // The physical files on disk for those file records will be orphaned.
+    // For a robust system, physical deletion should be queued or handled, but Prisma DB constraint handles the data layer.
+    await this.prisma.folder.delete({ where: { id: folderId } });
+    return { success: true, data: { message: 'Folder deleted successfully' } };
   }
 }
