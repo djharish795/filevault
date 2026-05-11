@@ -48,14 +48,7 @@ async function main() {
 
   console.log('\n✅ Seed complete!\n');
   console.log('ADMIN');
-  console.log('  admin@securevault.com  /  password123');
-  console.log('\n4 TEST USERS (password: password123 each)');
-  console.log('  jane.officer@bank.com   →  Jane Officer');
-  console.log('  james.lawyer@bank.com   →  James Lawyer');
-  console.log('  sarah.audit@bank.com    →  Sarah Auditor');
-  console.log('  raj.manager@bank.com    →  Raj Manager');
-  console.log('\nNo project access is pre-assigned.');
-  console.log('Admin grants access from the Share Access UI.\n');
+  console.log('  siva@filevault.com  /  naprocs2026\n');
 }
 
 main()
