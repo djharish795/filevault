@@ -253,6 +253,19 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
     );
   }
 
+  void _showProjectShareModal() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ProjectAccessModal(
+        projectId: widget.projectId,
+        projectName: widget.projectName,
+        onDone: () => _toast('Project access updated.'),
+      ),
+    );
+  }
+
   // -- Logout ----------------------------------------------------------------
 
   Future<void> _handleLogout() async {
@@ -318,7 +331,7 @@ class _FolderScreenState extends ConsumerState<FolderScreen>
               onSelectFiles: () => ref.read(folderViewProvider(_args).notifier).enterSelectionMode(),
               onNewFolder: _showCreateFolderSheet,
               onUpload: _uploadFile,
-              onShareFolder: widget.folderId != null ? _showFolderShareModal : null,
+              onShareFolder: widget.folderId != null ? _showFolderShareModal : _showProjectShareModal,
             ),
 
           // -- Tab bar (only in subfolders) ---------------------------
@@ -638,7 +651,7 @@ class _ActionBar extends StatelessWidget {
         onTap: onNewFolder,
       ));
 
-    if (isAdmin && isSubfolder && onShareFolder != null)
+    if (isAdmin && onShareFolder != null)
       buttons.add(_outlineBtn(
         icon: Icons.group_add_outlined,
         label: 'Share Access',
@@ -859,6 +872,19 @@ class _FilesTab extends ConsumerWidget {
                 isRoot: args.folderId == null,
                 args: args,
                 onTap: () => onFolderTap(f),
+                onShare: () {
+                  showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => _FolderAccessModal(
+                      projectId: args.projectId,
+                      folderId: f.id,
+                      folderName: f.name,
+                      onDone: () {},
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 20),
@@ -960,6 +986,7 @@ class _FolderTile extends ConsumerWidget {
   final bool isRoot;
   final FolderViewArgs args;
   final VoidCallback onTap;
+  final VoidCallback onShare;
 
   const _FolderTile({
     required this.folder,
@@ -968,6 +995,7 @@ class _FolderTile extends ConsumerWidget {
     required this.isRoot,
     required this.args,
     required this.onTap,
+    required this.onShare,
   });
 
   @override
@@ -1020,17 +1048,24 @@ class _FolderTile extends ConsumerWidget {
                 ],
               ),
             ),
-            if (isAdmin)
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: _kTextGrey, size: 20),
-                onSelected: (val) {
-                  if (val == 'rename') {
-                    _showRenameFolderDialog(context, ref, folder, args);
-                  } else if (val == 'delete') {
-                    _showDeleteFolderDialog(context, ref, folder, args);
-                  }
-                },
-                itemBuilder: (context) => [
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: _kTextGrey, size: 20),
+              onSelected: (val) {
+                if (val == 'share') {
+                  onShare();
+                } else if (val == 'rename') {
+                  _showRenameFolderDialog(context, ref, folder, args);
+                } else if (val == 'delete') {
+                  _showDeleteFolderDialog(context, ref, folder, args);
+                }
+              },
+              itemBuilder: (context) => [
+                if (isAdmin)
+                  const PopupMenuItem(
+                    value: 'share',
+                    child: Text('Share Access', style: TextStyle(fontSize: 13)),
+                  ),
+                if (isAdmin) ...[
                   const PopupMenuItem(
                     value: 'rename',
                     child: Text('Rename', style: TextStyle(fontSize: 13)),
@@ -1040,9 +1075,8 @@ class _FolderTile extends ConsumerWidget {
                     child: Text('Delete', style: TextStyle(fontSize: 13, color: Colors.red)),
                   ),
                 ],
-              )
-            else
-              const Icon(Icons.chevron_right, color: _kTextGrey, size: 20),
+              ],
+            ),
           ],
         ),
       ),
@@ -1826,7 +1860,7 @@ class _ShareModalState extends ConsumerState<_ShareModal> {
       _filtered = q.isEmpty
           ? _allMembers
           : _allMembers
-              .where((m) =>
+              .where((ProjectMember m) =>
                   m.name.toLowerCase().contains(q) ||
                   m.email.toLowerCase().contains(q))
               .toList();
@@ -2149,7 +2183,7 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
     setState(() {
       _filtered = q.isEmpty
           ? _allUsers
-          : _allUsers.where((u) =>
+          : _allUsers.where((ProjectMember u) =>
               u.name.toLowerCase().contains(q) ||
               u.email.toLowerCase().contains(q)).toList();
     });
@@ -2165,9 +2199,9 @@ class _FolderAccessModalState extends ConsumerState<_FolderAccessModal> {
       ]);
       if (mounted) {
         setState(() {
-          _allUsers  = results[0];
-          _filtered  = results[0];
-          _accessSet = results[1].map((m) => m.userId).toSet();
+          _allUsers  = results[0] as List<ProjectMember>;
+          _filtered  = results[0] as List<ProjectMember>;
+          _accessSet = (results[1] as List<ProjectMember>).map<String>((m) => m.userId).toSet();
           _isLoading = false;
         });
       }
@@ -3213,6 +3247,310 @@ class _AttachFileSheet extends StatelessWidget {
       case FileCategory.generic:
         return Icons.insert_drive_file_rounded;
     }
+  }
+}
+
+// --- Project Access Modal -----------------------------------------------------
+
+class ProjectAccessModal extends ConsumerStatefulWidget {
+  final String projectId;
+  final String projectName;
+  final VoidCallback onDone;
+
+  const ProjectAccessModal({
+    required this.projectId,
+    required this.projectName,
+    required this.onDone,
+  });
+
+  @override
+  ConsumerState<ProjectAccessModal> createState() => _ProjectAccessModalState();
+}
+
+class _ProjectAccessModalState extends ConsumerState<ProjectAccessModal> {
+  List<ProjectMember> _allUsers = [];
+  List<ProjectMember> _filtered = [];
+  Set<String> _accessSet        = {};
+  final _searchCtrl = TextEditingController();
+  bool _isLoading   = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(_onSearch);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _allUsers
+          : _allUsers.where((ProjectMember u) =>
+              u.name.toLowerCase().contains(q) ||
+              u.email.toLowerCase().contains(q)).toList();
+    });
+  }
+
+  Future<void> _load() async {
+    setState(() => _isLoading = true);
+    try {
+      final service = FolderService();
+      final results = await Future.wait([
+        service.getAllUsers(),
+        service.getProjectMembers(widget.projectId),
+      ]);
+      if (mounted) {
+        setState(() {
+          _allUsers  = results[0] as List<ProjectMember>;
+          _filtered  = results[0] as List<ProjectMember>;
+          _accessSet = (results[1] as List<ProjectMember>).map<String>((m) => m.userId).toSet();
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _toggle(ProjectMember user) {
+    final hadAccess = _accessSet.contains(user.userId);
+
+    setState(() {
+      if (hadAccess) {
+        _accessSet.remove(user.userId);
+      } else {
+        _accessSet.add(user.userId);
+      }
+    });
+
+    final service = FolderService();
+    final future = hadAccess
+        ? service.revokeProjectAccess(
+            projectId: widget.projectId, userId: user.userId)
+        : service.grantProjectAccess(
+            projectId: widget.projectId, email: user.email);
+
+    future.catchError((_) {
+      if (mounted) {
+        setState(() {
+          if (hadAccess) {
+            _accessSet.add(user.userId);
+          } else {
+            _accessSet.remove(user.userId);
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Failed to update project access.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accessCount = _accessSet.length;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: _kBackground,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Row(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: _kPrimaryLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.group_add_outlined,
+                      color: _kPrimary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Share Project Access',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: _kTextDark)),
+                      Text(
+                        widget.projectName,
+                        style: const TextStyle(
+                            fontSize: 12, color: _kTextGrey),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close,
+                      color: _kTextGrey, size: 20),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onDone();
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+          if (!_isLoading)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: accessCount > 0 ? _kPrimaryLight : _kSurface,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      accessCount == 0
+                          ? 'No users have access'
+                          : '$accessCount user${accessCount > 1 ? 's' : ''} have access',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: accessCount > 0 ? _kPrimary : _kTextGrey,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: TextField(
+              controller: _searchCtrl,
+              style: const TextStyle(fontSize: 14, color: _kTextDark),
+              decoration: InputDecoration(
+                hintText: 'Search users',
+                hintStyle: const TextStyle(color: _kTextGrey, fontSize: 14),
+                prefixIcon: const Icon(Icons.search,
+                    color: _kTextGrey, size: 20),
+                filled: true,
+                fillColor: _kSurface,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: _kCardBorder),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: _kCardBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide:
+                      const BorderSide(color: _kPrimary, width: 1.5),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.45,
+            ),
+            child: _isLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Center(
+                        child: CircularProgressIndicator(color: _kPrimary)),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _filtered.length,
+                    itemBuilder: (context, i) {
+                      final u = _filtered[i];
+                      final hasAccess = _accessSet.contains(u.userId);
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 4),
+                        leading: CircleAvatar(
+                          backgroundColor: _avatarColor(u.name),
+                          radius: 22,
+                          child: Text(u.initials,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                        title: Text(u.name,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: _kTextDark)),
+                        subtitle: Text(u.email,
+                            style: const TextStyle(
+                                fontSize: 12, color: _kTextGrey)),
+                        trailing: Checkbox(
+                          value: hasAccess,
+                          activeColor: _kPrimary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4)),
+                          onChanged: (_) => _toggle(u),
+                        ),
+                        onTap: () => _toggle(u),
+                      );
+                    },
+                  ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kPrimary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                ),
+                child: const Text('Done',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

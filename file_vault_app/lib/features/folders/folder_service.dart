@@ -105,6 +105,22 @@ class FolderService {
         .toList();
   }
 
+  // ── POST /projects/:projectId/sharing — grant project access ────────────────
+  Future<void> grantProjectAccess({
+    required String projectId,
+    required String email,
+  }) async {
+    await _dio.post('/projects/$projectId/sharing', data: {'email': email});
+  }
+
+  // ── DELETE /projects/:projectId/sharing/:userId — revoke project access ──────
+  Future<void> revokeProjectAccess({
+    required String projectId,
+    required String userId,
+  }) async {
+    await _dio.delete('/projects/$projectId/sharing/$userId');
+  }
+
   // ── GET /admin/users — all users in system (for sharing) ───────────────────
   Future<List<ProjectMember>> getAllUsers() async {
     final res = await _dio.get('/admin/users');

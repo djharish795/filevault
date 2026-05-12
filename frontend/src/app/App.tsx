@@ -9,6 +9,8 @@ import { FileCard } from '../features/files/components/FileCard';
 import { FileShareModal } from '../features/files/components/FileShareModal';
 import { ProjectCard } from '../features/projects/components/ProjectCard';
 import { UploadModal } from '../features/files/components/UploadModal';
+import { ShareModal } from '../features/permissions/components/ShareModal';
+import { FolderShareModal } from '../features/permissions/components/FolderShareModal';
 import { UserManagementPage } from '../features/users/UserManagementPage';
 import { UserSharedPage } from '../features/user/UserSharedPage';
 import { UserWorkspacePage } from '../features/user/UserWorkspacePage';
@@ -39,6 +41,9 @@ const DashboardPage = () => {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [folderShareOpen, setFolderShareOpen] = useState(false);
+  const [projectShareOpen, setProjectShareOpen] = useState(false);
+  const [folderToShare, setFolderToShare] = useState<{ id: string; name: string } | null>(null);
 
   // ─── Nested folder state ──────────────────────────────────────────────────────
   // currentFolderId = null means root; set = inside that folder
@@ -221,6 +226,34 @@ const DashboardPage = () => {
                   <FolderPlus className="w-4 h-4" /> New Subfolder
                 </Button>
               )}
+              {user?.isMasterAdmin && (
+                <>
+                  {activeFolderId && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setFolderToShare({
+                          id: activeFolderId,
+                          name: breadcrumb[breadcrumb.length - 1]?.name || 'Subfolder'
+                        });
+                        setFolderShareOpen(true);
+                      }}
+                      className="rounded-full px-4 gap-2 border-surface-200"
+                    >
+                      <Share2 className="w-4 h-4" /> Share Access
+                    </Button>
+                  )}
+                  {!activeFolderId && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setProjectShareOpen(true)}
+                      className="rounded-full px-4 gap-2 border-surface-200"
+                    >
+                      <Share2 className="w-4 h-4" /> Share Access
+                    </Button>
+                  )}
+                </>
+              )}
               <Button
                 onClick={() => setIsUploadOpen(true)}
                 className="rounded-full shadow-md px-5 gap-2 bg-brand-600 hover:bg-brand-700 text-white"
@@ -262,13 +295,14 @@ const DashboardPage = () => {
         <div className="flex items-center gap-2 mb-6 flex-wrap">
           <h3 className="text-[10px] uppercase font-bold text-surface-400 tracking-wider mr-2">Subfolders</h3>
           {folders.map(f => (
-            <button
-              key={f.id}
-              onClick={() => openFolder(f)}
-              className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl text-sm font-medium hover:border-brand-300 hover:shadow-sm transition-all"
-            >
-              <Folder className="w-4 h-4 text-brand-500" /> {f.name}
-            </button>
+            <div key={f.id} className="flex items-center bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl hover:border-brand-300 hover:shadow-sm transition-all overflow-hidden group">
+              <button
+                onClick={() => openFolder(f)}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium outline-none"
+              >
+                <Folder className="w-4 h-4 text-brand-500" /> {f.name}
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -334,6 +368,28 @@ const DashboardPage = () => {
           onClose={handleShareModalClose}
           fileId={currentShareFile.id}
           fileName={currentShareFile.name}
+        />
+      )}
+
+      {folderShareOpen && folderToShare && (
+        <FolderShareModal
+          isOpen={folderShareOpen}
+          onClose={() => {
+            setFolderShareOpen(false);
+            setFolderToShare(null);
+          }}
+          folderName={folderToShare.name}
+          folderId={folderToShare.id}
+          projectId={id!}
+        />
+      )}
+
+      {projectShareOpen && !activeFolderId && (
+        <ShareModal
+          isOpen={projectShareOpen}
+          onClose={() => setProjectShareOpen(false)}
+          fileName={project.name || 'Project'}
+          projectId={id!}
         />
       )}
     </div>

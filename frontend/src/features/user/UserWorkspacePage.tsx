@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useProjectDetails } from '@/hooks/useProjects';
 import { useAuthStore } from '@/features/auth/store';
@@ -6,6 +6,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FileCard } from '@/features/files/components/FileCard';
 import { FileShareModal } from '@/features/files/components/FileShareModal';
 import { UploadModal } from '@/features/files/components/UploadModal';
+import { ShareModal } from '@/features/permissions/components/ShareModal';
+import { FolderShareModal } from '@/features/permissions/components/FolderShareModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -56,6 +58,9 @@ export const UserWorkspacePage = () => {
   const { user } = useAuthStore();
   const { toast } = useToast();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [folderShareOpen, setFolderShareOpen] = useState(false);
+  const [projectShareOpen, setProjectShareOpen] = useState(false);
+  const [folderToShare, setFolderToShare] = useState<{ id: string; name: string } | null>(null);
 
   // ─── Nested folder state ──────────────────────────────────────────────────────
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -249,6 +254,34 @@ export const UserWorkspacePage = () => {
                   <FolderPlus className="w-4 h-4" /> New Subfolder
                 </Button>
               )}
+              {isAdmin && (
+                <>
+                  {activeFolderId && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setFolderToShare({
+                          id: activeFolderId,
+                          name: breadcrumb[breadcrumb.length - 1]?.name || 'Subfolder'
+                        });
+                        setFolderShareOpen(true);
+                      }}
+                      className="rounded-full px-4 gap-2 border-surface-200"
+                    >
+                      <Share2 className="w-4 h-4" /> Share Access
+                    </Button>
+                  )}
+                  {!activeFolderId && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setProjectShareOpen(true)}
+                      className="rounded-full px-4 gap-2 border-surface-200"
+                    >
+                      <Share2 className="w-4 h-4" /> Share Access
+                    </Button>
+                  )}
+                </>
+              )}
               {canUpload && (
                 <Button
                   onClick={() => setIsUploadOpen(true)}
@@ -280,9 +313,7 @@ export const UserWorkspacePage = () => {
             <button
               onClick={() => navigateTo(idx)}
               className={`px-2 py-1 rounded-md transition-colors ${
-                idx === breadcrumb.length - 1
-                  ? 'bg-surface-100 text-brand-700 font-semibold'
-                  : 'text-surface-500 hover:bg-surface-50'
+                idx === breadcrumb.length - 1 ? 'bg-surface-100 text-brand-700 font-semibold' : 'text-surface-500 hover:bg-surface-50'
               }`}
             >
               {crumb.name}
@@ -294,17 +325,16 @@ export const UserWorkspacePage = () => {
       {/* ── Subfolders at current level ───────────────────────────────────── */}
       {folders.length > 0 && (
         <div className="flex items-center gap-2 mb-6 flex-wrap">
-          <h3 className="text-[10px] uppercase font-bold text-surface-400 tracking-wider mr-2">
-            Subfolders
-          </h3>
+          <h3 className="text-[10px] uppercase font-bold text-surface-400 tracking-wider mr-2">Subfolders</h3>
           {folders.map(f => (
-            <button
-              key={f.id}
-              onClick={() => openFolder(f)}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-surface-200 rounded-xl text-sm font-medium hover:border-brand-300 hover:shadow-sm transition-all"
-            >
-              <Folder className="w-4 h-4 text-brand-500" /> {f.name}
-            </button>
+            <div key={f.id} className="flex items-center bg-white border border-surface-200 rounded-xl hover:border-brand-300 hover:shadow-sm transition-all overflow-hidden group">
+              <button
+                onClick={() => openFolder(f)}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium outline-none"
+              >
+                <Folder className="w-4 h-4 text-brand-500" /> {f.name}
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -425,6 +455,28 @@ export const UserWorkspacePage = () => {
           onClose={handleShareModalClose}
           fileId={currentShareFile.id}
           fileName={currentShareFile.name}
+        />
+      )}
+
+      {folderShareOpen && folderToShare && (
+        <FolderShareModal
+          isOpen={folderShareOpen}
+          onClose={() => {
+            setFolderShareOpen(false);
+            setFolderToShare(null);
+          }}
+          folderName={folderToShare.name}
+          folderId={folderToShare.id}
+          projectId={id!}
+        />
+      )}
+
+      {projectShareOpen && !activeFolderId && (
+        <ShareModal
+          isOpen={projectShareOpen}
+          onClose={() => setProjectShareOpen(false)}
+          fileName={project.name || 'Project'}
+          projectId={id!}
         />
       )}
     </div>

@@ -27,119 +27,29 @@ export class FoldersController {
   ): Promise<boolean> {
     if (isAdmin) return true;
 
-    // Check 1: explicit folder-level access
+    // Direct check
     const folderAccess = await this.prisma.folderAccess.findUnique({
       where: { folderId_userId: { folderId, userId } },
     }).catch(() => null);
     if (folderAccess) return true;
 
-    // Check 2 & 3: file-level access (owned or explicitly shared)
     const accessibleFile = await this.prisma.file.findFirst({
       where: {
         folderId,
-        OR: [
-          { ownerId: userId },
-          { sharedWith: { some: { userId } } },
-        ],
+        OR: [{ ownerId: userId }, { sharedWith: { some: { userId } } }],
       },
     });
     if (accessibleFile) return true;
 
-    // Deep check: Is any ancestor explicitly shared?
+    // Navigation check
     try {
       const folder = await this.prisma.folder.findUnique({ where: { id: folderId } });
       if (!folder) return false;
-      const accessibleIds = await this.getAccessibleFolderIds(folder.projectId, userId);
-      return accessibleIds.has(folderId);
+      const visibleIds = await this.prisma.getVisibleFolderIds(folder.projectId, userId);
+      return visibleIds.has(folderId);
     } catch {
       return false;
     }
-  }
-
-  /**
-   * Returns the set of folderIds a user can see within a project.
-   * Used for filtering folder lists without N+1 queries.
-   * Combines folder-level access + file-level access.
-   */
-  private async getAccessibleFolderIds(
-    projectId: string,
-    userId: string,
-  ): Promise<Set<string>> {
-    // Folder-level access rows
-    const folderAccessRows = await this.prisma.folderAccess.findMany({
-      where: { userId },
-      select: { folderId: true },
-    }).catch(() => []);
-
-    // File-level access (owned or shared files)
-    const accessibleFiles = await this.prisma.file.findMany({
-      where: {
-        projectId,
-        OR: [
-          { ownerId: userId },
-          { sharedWith: { some: { userId } } },
-        ],
-      },
-      select: { folderId: true },
-    });
-
-    const ids = new Set<string>();
-    const explicitIds = new Set<string>();
-
-    for (const row of folderAccessRows) {
-      ids.add(row.folderId);
-      explicitIds.add(row.folderId);
-    }
-    
-    const implicitIds = new Set<string>();
-    for (const f of accessibleFiles) {
-      if (f.folderId) {
-        ids.add(f.folderId);
-        implicitIds.add(f.folderId);
-      }
-    }
-
-    try {
-      const allFolders = await this.prisma.folder.findMany({
-        where: { projectId },
-        select: { id: true, parentId: true },
-      });
-      
-      const folderTree = new Map<string, string[]>();
-      const parentMap = new Map<string, string>();
-      
-      for (const f of allFolders) {
-        if (f.parentId) {
-          if (!folderTree.has(f.parentId)) folderTree.set(f.parentId, []);
-          folderTree.get(f.parentId)!.push(f.id);
-          parentMap.set(f.id, f.parentId);
-        }
-      }
-      
-      const queue = Array.from(explicitIds);
-      while (queue.length > 0) {
-        const curr = queue.shift()!;
-        const children = folderTree.get(curr) || [];
-        for (const child of children) {
-          if (!ids.has(child)) {
-            ids.add(child);
-            queue.push(child);
-          }
-        }
-      }
-      
-      for (const impId of implicitIds) {
-        let curr = parentMap.get(impId);
-        while (curr && !ids.has(curr)) {
-          ids.add(curr);
-          curr = parentMap.get(curr);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to resolve folder tree', err);
-    }
-
-    return ids;
   }
 
   // ─── POST /v1/folders — create folder ────────────────────────────────────────
@@ -202,8 +112,8 @@ export class FoldersController {
     }
 
     // Regular user: filter to only folders they can access
-    const accessibleIds = await this.getAccessibleFolderIds(projectId, user.id);
-    const folders = allFolders.filter((f) => accessibleIds.has(f.id));
+    const visibleIds = await this.prisma.getVisibleFolderIds(projectId, user.id);
+    const folders = allFolders.filter((f) => visibleIds.has(f.id));
 
     return { success: true, data: { folders } };
   }
@@ -237,11 +147,11 @@ export class FoldersController {
       select: { projectId: true },
     });
 
-    const accessibleIds = await this.getAccessibleFolderIds(
+    const visibleIds = await this.prisma.getVisibleFolderIds(
       parent?.projectId ?? '',
       user.id,
     );
-    const folders = allChildren.filter((f) => accessibleIds.has(f.id));
+    const folders = allChildren.filter((f) => visibleIds.has(f.id));
 
     return { success: true, data: { folders } };
   }

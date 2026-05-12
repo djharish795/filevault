@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:file_vault_app/features/auth/auth_provider.dart';
 import 'package:file_vault_app/features/auth/edit_profile_screen.dart';
 import 'package:file_vault_app/features/projects/project_provider.dart';
+import 'package:file_vault_app/features/folders/folder_screen.dart';
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 
@@ -366,9 +367,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         '/project/${project.id}',
                         extra: {'projectName': project.name},
                       ),
-                      onRename: () {
-                        _showRenameProjectDialog(project);
-                      },
+                      onRename: () => _showRenameProjectDialog(project),
                       onDelete: () async {
                         final confirmed = await showDialog<bool>(
                           context: context,
@@ -480,6 +479,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         }
       }
     });
+  }
+
+  void _showProjectShareModalFromProject(dynamic project) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ProjectAccessModal(
+        projectId: project.id,
+        projectName: project.name,
+        onDone: () => _toast('Project access updated.'),
+      ),
+    );
   }
 
   PreferredSizeWidget _buildAppBar(String? userName) {
@@ -786,7 +798,7 @@ class _ProjectCard extends StatelessWidget {
               project.updatedLabel as String,
               style: const TextStyle(fontSize: 11, color: _kTextGrey),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 8),
 
             // ── More menu ──────────────────────────────────────────────────
             PopupMenuButton<String>(

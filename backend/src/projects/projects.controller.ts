@@ -138,7 +138,7 @@ export class ProjectsController {
       let accessibleFolderIds = new Set<string>();
 
       try {
-        const [fileEntries, folderEntries, allFolders] = await Promise.all([
+        const [fileEntries, folderEntries] = await Promise.all([
           (this.prisma as any).fileAccess.findMany({
             where: { userId: user.id },
             select: { fileId: true },
@@ -147,33 +147,9 @@ export class ProjectsController {
             where: { userId: user.id },
             select: { folderId: true },
           }),
-          this.prisma.folder.findMany({
-            where: { projectId: id },
-            select: { id: true, parentId: true },
-          }),
         ]);
         sharedFileIds = new Set(fileEntries.map((e: any) => e.fileId));
         accessibleFolderIds = new Set(folderEntries.map((e: any) => e.folderId));
-
-        const folderTree = new Map<string, string[]>();
-        for (const f of allFolders) {
-          if (f.parentId) {
-            if (!folderTree.has(f.parentId)) folderTree.set(f.parentId, []);
-            folderTree.get(f.parentId)!.push(f.id);
-          }
-        }
-        
-        const queue = Array.from(accessibleFolderIds);
-        while (queue.length > 0) {
-          const curr = queue.shift()!;
-          const children = folderTree.get(curr) || [];
-          for (const child of children) {
-            if (!accessibleFolderIds.has(child)) {
-              accessibleFolderIds.add(child);
-              queue.push(child);
-            }
-          }
-        }
       } catch (err) {
         console.error('[Permission] Query failed:', err?.message ?? err);
       }
@@ -299,15 +275,22 @@ export class ProjectsController {
     });
     if (!member) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access' } }, HttpStatus.FORBIDDEN);
 
-    let folders: any[] = [];
+    let allFolders: any[] = [];
     try {
-      folders = await (this.prisma as any).folder.findMany({
+      allFolders = await (this.prisma as any).folder.findMany({
         where: { projectId },
         orderBy: { createdAt: 'asc' },
       });
     } catch {
-      // Folder table not yet created — run: npx prisma db push
+      // Folder table not yet created
     }
+
+    if (user.isMasterAdmin) {
+      return { success: true, data: { folders: allFolders } };
+    }
+
+    const visibleIds = await this.prisma.getVisibleFolderIds(projectId, user.id);
+    const folders = allFolders.filter(f => visibleIds.has(f.id));
 
     return { success: true, data: { folders } };
   }
