@@ -15,7 +15,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   async getVisibleFolderIds(projectId: string, userId: string): Promise<Set<string>> {
     const [folderAccess, accessibleFiles] = await Promise.all([
       this.folderAccess.findMany({
-        where: { userId },
+        where: { userId, folder: { projectId } },
         select: { folderId: true },
       }),
       this.file.findMany({
