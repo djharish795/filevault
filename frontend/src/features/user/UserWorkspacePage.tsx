@@ -299,11 +299,10 @@ export const UserWorkspacePage = () => {
       <div className="flex items-center gap-2 mb-4 flex-wrap text-sm">
         <button
           onClick={() => navigateTo(-1)}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
-            !activeFolderId
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${!activeFolderId
               ? 'bg-surface-100 text-brand-700 font-semibold'
               : 'text-surface-500 hover:bg-surface-50'
-          }`}
+            }`}
         >
           <HardDrive className="w-4 h-4" /> Root
         </button>
@@ -312,9 +311,8 @@ export const UserWorkspacePage = () => {
             <span className="text-surface-300">/</span>
             <button
               onClick={() => navigateTo(idx)}
-              className={`px-2 py-1 rounded-md transition-colors ${
-                idx === breadcrumb.length - 1 ? 'bg-surface-100 text-brand-700 font-semibold' : 'text-surface-500 hover:bg-surface-50'
-              }`}
+              className={`px-2 py-1 rounded-md transition-colors ${idx === breadcrumb.length - 1 ? 'bg-surface-100 text-brand-700 font-semibold' : 'text-surface-500 hover:bg-surface-50'
+                }`}
             >
               {crumb.name}
             </button>
@@ -634,11 +632,10 @@ const ChatTab = ({ folderId, projectId }: { folderId: string; projectId: string 
 
                     {msg.messageType === 'text' ? (
                       <div
-                        className={`px-4 py-2.5 rounded-2xl ${
-                          isMe
+                        className={`px-4 py-2.5 rounded-2xl ${isMe
                             ? 'bg-brand-600 text-white'
                             : 'bg-surface-100 text-surface-900'
-                        }`}
+                          }`}
                       >
                         <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                           {msg.text}
