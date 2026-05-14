@@ -33,3 +33,9 @@ backend/node_modules/
 backend/dist/
 backend/prisma/dev.db*
 backend/uploads/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
