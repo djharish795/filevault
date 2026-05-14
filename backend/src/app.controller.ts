@@ -1,12 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
-import { PrismaService } from './prisma/prisma.service';
+import { DatabaseService } from './database/database.service';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
   ) {}
 
   @Get()
@@ -17,30 +17,27 @@ export class AppController {
   @Get('test-db')
   async testDatabase() {
     try {
-      // Test 1: Count users
-      const userCount = await this.prisma.user.count();
+      const userCount = await this.db.user.countDocuments();
+      const users = await this.db.user.find().select('email name isMasterAdmin');
+      const projectCount = await this.db.project.countDocuments();
 
-      // Test 2: Fetch all users
-      const users = await this.prisma.user.findMany({
-        select: { id: true, email: true, name: true, isMasterAdmin: true },
-      });
-
-      // Test 3: Count projects
-      const projectCount = await this.prisma.project.count();
-
-      // Test 4: Fetch projects with relations
-      const projects = await this.prisma.project.findMany({
-        include: {
-          _count: { select: { members: true, files: true } },
-        },
-      });
+      const projects = await Promise.all((await this.db.project.find()).map(async (p) => {
+        const memberCount = await this.db.projectMember.countDocuments({ projectId: p._id });
+        const fileCount = await this.db.file.countDocuments({ projectId: p._id });
+        return {
+          id: p._id.toString(),
+          name: p.name,
+          memberCount,
+          fileCount,
+        };
+      }));
 
       return {
         success: true,
-        message: 'Database connection verified',
+        message: 'Database connection verified (MongoDB)',
         data: {
           userCount,
-          users,
+          users: users.map(u => ({ id: u._id.toString(), email: u.email, name: u.name, isMasterAdmin: u.isMasterAdmin })),
           projectCount,
           projects,
         },

@@ -11,206 +11,186 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { PrismaService } from '../prisma/prisma.service';
+import { DatabaseService } from '../database/database.service';
+import { Types } from 'mongoose';
 
 @Controller('v1/projects/:projectId/sharing')
 @UseGuards(JwtAuthGuard)
 export class SharingController {
-  constructor(private readonly prisma: PrismaService) {}
-
-  // ─── GET: Who has access to this project ─────────────────────────────────────
+  constructor(private readonly db: DatabaseService) {}
 
   @Get()
   async getPeopleWithAccess(@Param('projectId') projectId: string, @Req() req: any) {
     const user = req.user;
+    const projId = new Types.ObjectId(projectId);
 
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: { members: { include: { user: { select: { id: true, name: true, email: true } } } } },
-    });
-
+    const project = await this.db.project.findById(projectId);
     if (!project) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, HttpStatus.NOT_FOUND);
 
-    const isMember = project.members.some(m => m.userId === user.id);
+    const members = await this.db.projectMember.find({ projectId: projId }).populate('userId', 'name email');
+    const isMember = members.some(m => m.userId?._id.toString() === user.id);
+    
     if (!user.isMasterAdmin && !isMember) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access' } }, HttpStatus.FORBIDDEN);
 
-    const people = project.members.map(m => ({
-      userId: m.user.id,
-      name: m.user.name,
-      email: m.user.email,
-      isOwner: m.user.id === user.id && user.isMasterAdmin,
+    const people = members.map((m: any) => ({
+      userId: m.userId._id.toString(),
+      name: m.userId.name,
+      email: m.userId.email,
+      isOwner: m.userId._id.toString() === user.id && user.isMasterAdmin,
     }));
 
     return { success: true, data: { people } };
   }
 
-  // ─── POST: Add a user to the project ─────────────────────────────────────────
-
   @Post()
-  async addUserToProject(
-    @Param('projectId') projectId: string,
-    @Body() body: { email: string },
-    @Req() req: any,
-  ) {
+  async addUserToProject(@Param('projectId') projectId: string, @Body() body: { email: string }, @Req() req: any) {
     const requestingUser = req.user;
     if (!requestingUser.isMasterAdmin) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin can share access' } }, HttpStatus.FORBIDDEN);
     if (!body.email) throw new HttpException({ success: false, error: { code: 'BAD_REQUEST', message: 'Email is required' } }, HttpStatus.BAD_REQUEST);
 
-    const targetUser = await this.prisma.user.findUnique({ where: { email: body.email } });
+    const targetUser = await this.db.user.findOne({ email: body.email });
     if (!targetUser) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: `No user found with email "${body.email}"` } }, HttpStatus.NOT_FOUND);
 
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, HttpStatus.NOT_FOUND);
+    const projId = new Types.ObjectId(projectId);
+    const uId = targetUser._id;
 
-    await this.prisma.projectMember.upsert({
-      where: { projectId_userId: { projectId, userId: targetUser.id } },
-      update: {},
-      create: { projectId, userId: targetUser.id } as any,
+    await this.db.projectMember.findOneAndUpdate(
+      { projectId: projId, userId: uId },
+      { projectId: projId, userId: uId },
+      { upsert: true, new: true }
+    );
+
+    await this.db.auditLog.create({
+      action: 'ACCESS_GRANTED',
+      userId: new Types.ObjectId(requestingUser.id),
+      projectId: projId,
+      metadata: { targetUserId: uId.toString(), targetEmail: targetUser.email },
     });
 
-    await this.prisma.auditLog.create({
-      data: { action: 'ACCESS_GRANTED', userId: requestingUser.id, projectId, metadata: { targetUserId: targetUser.id, targetEmail: targetUser.email } },
-    });
-
-    return { success: true, data: { userId: targetUser.id, name: targetUser.name, email: targetUser.email, message: `Access granted to ${targetUser.name}` } };
+    return { success: true, data: { userId: uId.toString(), name: targetUser.name, email: targetUser.email, message: `Access granted to ${targetUser.name}` } };
   }
 
-  // ─── DELETE: Remove a user's project access ───────────────────────────────────
-
   @Delete(':userId')
-  async removeUserAccess(
-    @Param('projectId') projectId: string,
-    @Param('userId') userId: string,
-    @Req() req: any,
-  ) {
+  async removeUserAccess(@Param('projectId') projectId: string, @Param('userId') userId: string, @Req() req: any) {
     const requestingUser = req.user;
     if (!requestingUser.isMasterAdmin) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin can remove access' } }, HttpStatus.FORBIDDEN);
 
-    const existing = await this.prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } });
-    if (!existing) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'User is not a member of this project' } }, HttpStatus.NOT_FOUND);
+    const projId = new Types.ObjectId(projectId);
+    const uId = new Types.ObjectId(userId);
 
-    await this.prisma.projectMember.delete({ where: { projectId_userId: { projectId, userId } } });
+    const existing = await this.db.projectMember.findOne({ projectId: projId, userId: uId });
+    if (!existing) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'User is not a member' } }, HttpStatus.NOT_FOUND);
 
-    await this.prisma.auditLog.create({
-      data: { action: 'ACCESS_REVOKED', userId: requestingUser.id, projectId, metadata: { targetUserId: userId } },
+    await this.db.projectMember.deleteOne({ projectId: projId, userId: uId });
+
+    await this.db.auditLog.create({
+      action: 'ACCESS_REVOKED',
+      userId: new Types.ObjectId(requestingUser.id),
+      projectId: projId,
+      metadata: { targetUserId: userId },
     });
 
     return { success: true, data: { message: 'Access removed successfully' } };
   }
 
-  // ─── GET: Search users not yet in project ─────────────────────────────────────
-
   @Get('search-users')
   async searchUsers(@Param('projectId') projectId: string, @Req() req: any) {
     const requestingUser = req.user;
-    if (!requestingUser.isMasterAdmin) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin can search users' } }, HttpStatus.FORBIDDEN);
+    if (!requestingUser.isMasterAdmin) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin can search' } }, HttpStatus.FORBIDDEN);
 
-    const members = await this.prisma.projectMember.findMany({ where: { projectId }, select: { userId: true } });
+    const projId = new Types.ObjectId(projectId);
+    const members = await this.db.projectMember.find({ projectId: projId }).select('userId');
     const memberIds = members.map(m => m.userId);
 
-    const users = await this.prisma.user.findMany({
-      where: { id: { notIn: memberIds } },
-      select: { id: true, name: true, email: true },
-      orderBy: { name: 'asc' },
-    });
+    const users = await this.db.user.find({
+      _id: { $nin: memberIds },
+    }).select('name email').sort({ name: 1 });
 
-    return { success: true, data: { users } };
+    return { success: true, data: { users: users.map(u => ({ id: u._id.toString(), name: u.name, email: u.email })) } };
   }
 
-  // ─── GET: Who has access to a specific file ──────────────────────────────────
-
   @Get('files/:fileId/access')
-  async getFileAccess(
-    @Param('projectId') projectId: string,
-    @Param('fileId') fileId: string,
-    @Req() req: any,
-  ) {
+  async getFileAccess(@Param('projectId') projectId: string, @Param('fileId') fileId: string, @Req() req: any) {
     const requestingUser = req.user;
-    if (!requestingUser.isMasterAdmin) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin can view file access' } }, HttpStatus.FORBIDDEN);
+    if (!requestingUser.isMasterAdmin) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin can view' } }, HttpStatus.FORBIDDEN);
 
-    const file = await this.prisma.file.findFirst({ where: { id: fileId, projectId } });
+    const fId = new Types.ObjectId(fileId);
+    const projId = new Types.ObjectId(projectId);
+
+    const file = await this.db.file.findOne({ _id: fId, projectId: projId });
     if (!file) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'File not found' } }, HttpStatus.NOT_FOUND);
 
-    let sharedWith: any[] = [];
-    try {
-      const entries = await (this.prisma as any).fileAccess.findMany({
-        where: { fileId },
-        include: { user: { select: { id: true, name: true, email: true } } },
-      });
-      sharedWith = entries.map((e: any) => e.user);
-    } catch {
-      // FileAccess table not yet created — run: npx prisma db push
-    }
+    const accessList = await this.db.fileAccess.find({ fileId: fId }).populate('userId', 'name email');
 
     return {
       success: true,
       data: {
         fileId,
         fileName: file.name,
-        sharedWith,
+        sharedWith: accessList.map((e: any) => ({
+          id: e.userId._id.toString(),
+          name: e.userId.name,
+          email: e.userId.email,
+        })),
       },
     };
   }
 
-  // ─── POST: Share a specific file with a user ──────────────────────────────────
-
   @Post('files/:fileId/share')
-  async shareFile(
-    @Param('projectId') projectId: string,
-    @Param('fileId') fileId: string,
-    @Body() body: { userId: string },
-    @Req() req: any,
-  ) {
+  async shareFile(@Param('projectId') projectId: string, @Param('fileId') fileId: string, @Body() body: { userId: string }, @Req() req: any) {
     const requestingUser = req.user;
+    const fId = new Types.ObjectId(fileId);
+    const uId = new Types.ObjectId(body.userId);
+    const projId = new Types.ObjectId(projectId);
 
-    const file = await this.prisma.file.findFirst({ where: { id: fileId, projectId } });
+    const file = await this.db.file.findOne({ _id: fId, projectId: projId });
     if (!file) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'File not found' } }, HttpStatus.NOT_FOUND);
 
-    const canShare = requestingUser.isMasterAdmin || file.ownerId === requestingUser.id;
-    if (!canShare) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin or file owner can share files' } }, HttpStatus.FORBIDDEN);
+    const canShare = requestingUser.isMasterAdmin || file.ownerId.toString() === requestingUser.id;
+    if (!canShare) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No permission' } }, HttpStatus.FORBIDDEN);
 
-    // Automatically add user to project if not already a member
-    await this.prisma.projectMember.upsert({
-      where: { projectId_userId: { projectId, userId: body.userId } },
-      update: {},
-      create: { projectId, userId: body.userId } as any,
-    });
+    // Auto-add to project
+    await this.db.projectMember.findOneAndUpdate(
+      { projectId: projId, userId: uId },
+      { projectId: projId, userId: uId },
+      { upsert: true, new: true }
+    );
 
-    await (this.prisma as any).fileAccess.upsert({
-      where: { fileId_userId: { fileId, userId: body.userId } },
-      update: {},
-      create: { fileId, userId: body.userId },
-    }).catch((err: any) => {
-      console.error('[FileAccess] Insert failed:', err?.message ?? err);
-      throw new HttpException(
-        { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to save file access. Run: npx prisma db push' } },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    });
+    // Grant file access
+    await this.db.fileAccess.findOneAndUpdate(
+      { fileId: fId, userId: uId },
+      { fileId: fId, userId: uId },
+      { upsert: true, new: true }
+    );
 
-    await this.prisma.auditLog.create({
-      data: { action: 'FILE_SHARED', userId: requestingUser.id, projectId, fileId, metadata: { targetUserId: body.userId } },
+    await this.db.auditLog.create({
+      action: 'FILE_SHARED',
+      userId: new Types.ObjectId(requestingUser.id),
+      projectId: projId,
+      fileId: fId,
+      metadata: { targetUserId: body.userId },
     });
 
     return { success: true, data: { message: 'File shared successfully' } };
   }
 
-  // ─── DELETE: Revoke file access ───────────────────────────────────────────────
-
   @Delete('files/:fileId/share/:userId')
-  async revokeFileAccess(
-    @Param('projectId') projectId: string,
-    @Param('fileId') fileId: string,
-    @Param('userId') userId: string,
-    @Req() req: any,
-  ) {
+  async revokeFileAccess(@Param('projectId') projectId: string, @Param('fileId') fileId: string, @Param('userId') userId: string, @Req() req: any) {
     const requestingUser = req.user;
-    if (!requestingUser.isMasterAdmin) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Only admin can revoke file access' } }, HttpStatus.FORBIDDEN);
+    if (!requestingUser.isMasterAdmin) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'Admin only' } }, HttpStatus.FORBIDDEN);
 
-    await (this.prisma as any).fileAccess.deleteMany({ where: { fileId, userId } });
+    const fId = new Types.ObjectId(fileId);
+    const uId = new Types.ObjectId(userId);
+    const projId = new Types.ObjectId(projectId);
 
-    await this.prisma.auditLog.create({
-      data: { action: 'FILE_ACCESS_REVOKED', userId: requestingUser.id, projectId, fileId, metadata: { targetUserId: userId } },
+    await this.db.fileAccess.deleteMany({ fileId: fId, userId: uId });
+
+    await this.db.auditLog.create({
+      action: 'FILE_ACCESS_REVOKED',
+      userId: new Types.ObjectId(requestingUser.id),
+      projectId: projId,
+      fileId: fId,
+      metadata: { targetUserId: userId },
     });
 
     return { success: true, data: { message: 'File access revoked' } };

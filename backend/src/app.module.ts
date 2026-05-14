@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaModule } from './prisma/prisma.module';
+import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { ProjectsModule } from './projects/projects.module';
 import { FilesModule } from './files/files.module';
@@ -12,7 +13,18 @@ import { AdminModule } from './admin/admin.module';
 import { FoldersModule } from './folders/folders.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProjectsModule, FilesModule, SearchModule, StorageModule, SharingModule, AdminModule, FoldersModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    DatabaseModule,
+    AuthModule,
+    ProjectsModule,
+    FilesModule,
+    SearchModule,
+    StorageModule,
+    SharingModule,
+    AdminModule,
+    FoldersModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -3,20 +3,9 @@ import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { join } from 'path';
-import * as fs from 'fs';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
-  // Ensure /uploads folder exists
-  const uploadsDir = join(process.cwd(), 'uploads');
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-
-  // Serve /uploads as static files → GET /uploads/filename.ext
-  app.useStaticAssets(uploadsDir, { prefix: '/uploads' });
 
   // Cookie parsing for HttpOnly refresh tokens
   app.use(cookieParser());
@@ -49,7 +38,6 @@ async function bootstrap() {
   // Binding to localhost (default) makes the server unreachable from outside.
   await app.listen(port, '0.0.0.0');
   console.log(`Backend running on port ${port}`);
-  console.log(`Uploaded files served at: /uploads/<filename>`);
   console.log(`Swagger docs: /docs`);
 }
 bootstrap();

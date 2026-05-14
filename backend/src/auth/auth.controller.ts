@@ -1,14 +1,14 @@
 import { Controller, Get, Post, Patch, Body, Res, Req, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { PrismaService } from '../prisma/prisma.service';
+import { DatabaseService } from '../database/database.service';
 import * as express from 'express';
 
 @Controller('v1/auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
-    private prisma: PrismaService,
+    private db: DatabaseService,
   ) {}
 
   @Post('login')
@@ -20,7 +20,6 @@ export class AuthController {
       throw new HttpException({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } }, HttpStatus.UNAUTHORIZED);
     }
     
-    // Set HttpOnly refresh token
     res.cookie('refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -47,66 +46,42 @@ export class AuthController {
       const accessToken = await this.authService.refreshAccessToken(refreshToken);
       return { success: true, data: { accessToken } };
     } catch (e) {
-      // Wipe invalid cookies
       res.clearCookie('refresh_token');
       throw new HttpException({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or expired refresh token' } }, HttpStatus.UNAUTHORIZED);
     }
   }
 
-  // ─── GET /auth/me — return current authenticated user ────────────────────────
-
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getMe(@Req() req: any) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { id: true, name: true, email: true, isMasterAdmin: true },
-    });
+    const user = await this.db.user.findById(req.user.id).select('name email isMasterAdmin');
     if (!user) {
-      throw new HttpException(
-        { success: false, error: { code: 'NOT_FOUND', message: 'User not found' } },
-        HttpStatus.NOT_FOUND,
-      );
+      throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, HttpStatus.NOT_FOUND);
     }
-    return { success: true, data: { user } };
+    return { success: true, data: { user: { id: user._id.toString(), name: user.name, email: user.email, isMasterAdmin: user.isMasterAdmin } } };
   }
-
-  // ─── Update own profile (name, phone) — any authenticated user ───────────────
 
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
-  async updateProfile(
-    @Body() body: { name?: string; phone?: string },
-    @Req() req: any,
-  ) {
+  async updateProfile(@Body() body: { name?: string; phone?: string }, @Req() req: any) {
     const userId = req.user.id;
 
     if (!body.name?.trim() && !body.phone?.trim()) {
-      throw new HttpException(
-        { success: false, error: { code: 'BAD_REQUEST', message: 'Nothing to update' } },
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException({ success: false, error: { code: 'BAD_REQUEST', message: 'Nothing to update' } }, HttpStatus.BAD_REQUEST);
     }
 
-    if (body.name !== undefined && !body.name.trim()) {
-      throw new HttpException(
-        { success: false, error: { code: 'BAD_REQUEST', message: 'Name cannot be empty' } },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+    const user = await this.db.user.findById(userId);
+    if (!user) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, HttpStatus.NOT_FOUND);
 
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        ...(body.name?.trim() && { name: body.name.trim() }),
-      },
-      select: { id: true, name: true, email: true, isMasterAdmin: true },
-    });
+    if (body.name?.trim()) user.name = body.name.trim();
+    // Phone logic omitted if not in schema, assuming only name update for now as per schema
+    
+    await user.save();
 
     return {
       success: true,
       data: {
-        user: updated,
+        user: { id: user._id.toString(), name: user.name, email: user.email, isMasterAdmin: user.isMasterAdmin },
         message: 'Profile updated successfully',
       },
     };

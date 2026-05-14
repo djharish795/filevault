@@ -1,11 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Req, UseGuards, Param, HttpException, HttpStatus, Body } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { PrismaService } from '../prisma/prisma.service';
+import { DatabaseService } from '../database/database.service';
+import { Types } from 'mongoose';
 
 @Controller('v1/projects')
 @UseGuards(JwtAuthGuard)
 export class ProjectsController {
-  constructor(private prisma: PrismaService) {}
+  constructor(private db: DatabaseService) {}
 
   @Post()
   async createProject(
@@ -28,33 +29,34 @@ export class ProjectsController {
       );
     }
 
-    const project = await this.prisma.project.create({
-      data: {
-        name: body.name.trim(),
-        caseNumber: body.caseNumber?.trim() || null,
-        members: {
-          create: [{ userId: user.id } as any],
-        },
-      },
+    // 1. Create the project
+    const project: any = await this.db.project.create({
+      name: body.name.trim(),
+      caseNumber: body.caseNumber?.trim() || undefined,
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        action: 'PROJECT_CREATED',
-        userId: user.id,
-        projectId: project.id,
-        metadata: { name: project.name, caseNumber: project.caseNumber },
-      },
+    // 2. Add the creator as a member
+    await this.db.projectMember.create({
+      projectId: project._id,
+      userId: new Types.ObjectId(user.id),
+    });
+
+    // 3. Create audit log
+    await this.db.auditLog.create({
+      action: 'PROJECT_CREATED',
+      userId: new Types.ObjectId(user.id),
+      projectId: project._id,
+      metadata: { name: project.name, caseNumber: project.caseNumber },
     });
 
     return {
       success: true,
       data: {
-        id: project.id,
+        id: project._id.toString(),
         name: project.name,
         caseNumber: project.caseNumber,
         memberCount: 1,
-        updatedAt: project.updatedAt,
+        updatedAt: (project as any).updatedAt,
       },
     };
   }
@@ -62,125 +64,95 @@ export class ProjectsController {
   @Get()
   async getProjects(@Req() req) {
     const user = req.user;
+    const uId = new Types.ObjectId(user.id);
     
     let projects;
     if (user.isMasterAdmin) {
-      projects = await this.prisma.project.findMany({
-        include: { _count: { select: { members: true } } },
-        orderBy: { updatedAt: 'desc' }
-      });
+      projects = await this.db.project.find().sort({ updatedAt: -1 });
     } else {
-      const pm = await this.prisma.projectMember.findMany({
-        where: { userId: user.id },
-        include: { project: { include: { _count: { select: { members: true } } } } },
-        orderBy: { project: { updatedAt: 'desc' } }
-      });
-      projects = pm.map(m => m.project);
+      const pm = await this.db.projectMember.find({ userId: uId }).populate('projectId');
+      projects = pm.map((m: any) => m.projectId).filter(p => !!p);
     }
+
+    // Get member counts
+    const projectData = await Promise.all(projects.map(async (p) => {
+      const count = await this.db.projectMember.countDocuments({ projectId: p._id });
+      return {
+        id: p._id.toString(),
+        name: p.name,
+        caseNumber: p.caseNumber,
+        memberCount: count,
+        updatedAt: (p as any).updatedAt,
+      };
+    }));
 
     return {
       success: true,
-      data: projects.map(p => ({
-        id: p.id,
-        name: p.name,
-        caseNumber: p.caseNumber,
-        memberCount: p._count?.members || 0,
-        updatedAt: p.updatedAt
-      }))
+      data: projectData,
     };
   }
 
   @Get(':id')
   async getProjectDetails(@Param('id') id: string, @Req() req) {
     const user = req.user;
+    const projId = new Types.ObjectId(id);
 
-    // Fetch all project members to know who is admin
-    const project = await this.prisma.project.findUnique({
-      where: { id },
-      include: {
-        files: {
-          include: {
-            owner: { select: { id: true, name: true, email: true } },
-          },
-          orderBy: { createdAt: 'desc' },
-        },
-      },
-    });
-
+    const project = await this.db.project.findById(id);
     if (!project) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, HttpStatus.NOT_FOUND);
 
-    // Access check: admin sees all, members see their project
+    // Access check
     if (!user.isMasterAdmin) {
-      const member = await this.prisma.projectMember.findUnique({
-        where: { projectId_userId: { projectId: id, userId: user.id } },
-      });
+      const member = await this.db.projectMember.findOne({ projectId: projId, userId: new Types.ObjectId(user.id) });
       if (!member) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access to project' } }, HttpStatus.FORBIDDEN);
     }
 
-    // All permissions are equal — if you're a member, you have full access
     const permissions = { can_view: true, can_upload: true, can_delete: true, can_share: true };
 
-    // ─── File visibility (strict per-file access) ─────────────────────────────
-    // Admin          → sees ALL files
-    // Regular user   → sees ONLY:
-    //   1. Files they uploaded (ownerId === user.id)
-    //   2. Files explicitly shared with them via FileAccess table
+    // File visibility
     let visibleFiles;
-
     if (user.isMasterAdmin) {
-      visibleFiles = project.files;
+      visibleFiles = await this.db.file.find({ projectId: projId }).populate('ownerId', 'name email').sort({ createdAt: -1 });
     } else {
-      // A user can see a file if:
-      //   1. They own it
-      //   2. They have explicit FileAccess to it
-      //   3. They have FolderAccess to the folder containing it (folder-level sharing)
-      let sharedFileIds = new Set<string>();
-      let accessibleFolderIds = new Set<string>();
+      const uId = new Types.ObjectId(user.id);
+      
+      // Get shared file IDs
+      const sharedFileAccess = await this.db.fileAccess.find({ userId: uId });
+      const sharedFileIds = sharedFileAccess.map(a => a.fileId.toString());
 
-      try {
-        const [fileEntries, folderEntries] = await Promise.all([
-          (this.prisma as any).fileAccess.findMany({
-            where: { userId: user.id },
-            select: { fileId: true },
-          }),
-          this.prisma.folderAccess.findMany({
-            where: { userId: user.id },
-            select: { folderId: true },
-          }),
-        ]);
-        sharedFileIds = new Set(fileEntries.map((e: any) => e.fileId));
-        accessibleFolderIds = new Set(folderEntries.map((e: any) => e.folderId));
-      } catch (err) {
-        console.error('[Permission] Query failed:', err?.message ?? err);
-      }
+      // Get shared folder IDs
+      const folderAccess = await this.db.folderAccess.find({ userId: uId });
+      const sharedFolderIds = folderAccess.map(a => a.folderId.toString());
 
-      visibleFiles = project.files.filter(file =>
-        file.ownerId === user.id ||
-        sharedFileIds.has(file.id) ||
-        (file.folderId !== null && accessibleFolderIds.has(file.folderId))
-      );
+      visibleFiles = await this.db.file.find({
+        projectId: projId,
+        $or: [
+          { ownerId: uId },
+          { _id: { $in: sharedFileIds } },
+          { folderId: { $in: sharedFolderIds } },
+        ],
+      }).populate('ownerId', 'name email').sort({ createdAt: -1 });
     }
 
-    const mappedFiles = visibleFiles.map(file => ({
-      id: file.id,
+    const mappedFiles = visibleFiles.map((file: any) => ({
+      id: file._id.toString(),
       name: file.name,
       type: file.mimeType,
       size: file.size,
-      folderId: file.folderId ?? null,
+      folderId: file.folderId?.toString() ?? null,
       updatedAt: file.updatedAt.toISOString().split('T')[0],
-      owner: file.owner.name,
+      owner: file.ownerId?.name ?? 'Unknown',
       permissions: {
         canView: true,
         canDownload: true,
-        canDelete: user.isMasterAdmin || file.ownerId === user.id,
-        canShare: user.isMasterAdmin || file.ownerId === user.id,
+        canDelete: user.isMasterAdmin || file.ownerId?._id.toString() === user.id,
+        canShare: user.isMasterAdmin || file.ownerId?._id.toString() === user.id,
       },
     }));
 
     return {
       success: true,
       data: {
-        id: project.id,
+        id: project._id.toString(),
         name: project.name,
         caseNumber: project.caseNumber,
         permissions,
@@ -203,36 +175,26 @@ export class ProjectsController {
       );
     }
 
-    const project = await this.prisma.project.findUnique({ where: { id } });
-    if (!project) {
-      throw new HttpException(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } },
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    const project = await this.db.project.findById(id);
+    if (!project) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, HttpStatus.NOT_FOUND);
 
-    const updated = await this.prisma.project.update({
-      where: { id },
-      data: {
-        ...(body.name && { name: body.name.trim() }),
-        ...(body.caseNumber !== undefined && { caseNumber: body.caseNumber?.trim() || null }),
-      },
-      include: { _count: { select: { members: true } } },
-    });
+    if (body.name) project.name = body.name.trim();
+    if (body.caseNumber !== undefined) project.caseNumber = body.caseNumber?.trim() || undefined;
+    
+    await project.save();
+    const memberCount = await this.db.projectMember.countDocuments({ projectId: project._id });
 
     return {
       success: true,
       data: {
-        id: updated.id,
-        name: updated.name,
-        caseNumber: updated.caseNumber,
-        memberCount: updated._count.members,
-        updatedAt: updated.updatedAt,
+        id: project._id.toString(),
+        name: project.name,
+        caseNumber: project.caseNumber,
+        memberCount,
+        updatedAt: (project as any).updatedAt,
       },
     };
   }
-
-  // ─── Create subfolder inside a project ───────────────────────────────────────
 
   @Post(':id/folders')
   async createFolder(
@@ -254,43 +216,48 @@ export class ProjectsController {
       );
     }
 
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    const project = await this.db.project.findById(projectId);
     if (!project) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, HttpStatus.NOT_FOUND);
 
-    const folder = await (this.prisma as any).folder.create({
-      data: { name: body.name.trim(), projectId },
+    const folder = await this.db.folder.create({
+      name: body.name.trim(),
+      projectId: project._id,
     });
 
-    return { success: true, data: { id: folder.id, name: folder.name, projectId: folder.projectId } };
+    return {
+      success: true,
+      data: {
+        id: folder._id.toString(),
+        name: folder.name,
+        projectId: folder.projectId.toString(),
+      },
+    };
   }
-
-  // ─── Get subfolders of a project ──────────────────────────────────────────────
 
   @Get(':id/folders')
   async getFolders(@Param('id') projectId: string, @Req() req: any) {
     const user = req.user;
+    const projId = new Types.ObjectId(projectId);
 
-    const member = user.isMasterAdmin ? true : await this.prisma.projectMember.findUnique({
-      where: { projectId_userId: { projectId, userId: user.id } },
-    });
-    if (!member) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access' } }, HttpStatus.FORBIDDEN);
-
-    let allFolders: any[] = [];
-    try {
-      allFolders = await (this.prisma as any).folder.findMany({
-        where: { projectId },
-        orderBy: { createdAt: 'asc' },
-      });
-    } catch {
-      // Folder table not yet created
+    // Access check
+    if (!user.isMasterAdmin) {
+      const member = await this.db.projectMember.findOne({ projectId: projId, userId: new Types.ObjectId(user.id) });
+      if (!member) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access' } }, HttpStatus.FORBIDDEN);
     }
+
+    const allFolders = await this.db.folder.find({ projectId: projId }).sort({ createdAt: 1 });
 
     if (user.isMasterAdmin) {
-      return { success: true, data: { folders: allFolders } };
+      return {
+        success: true,
+        data: { folders: allFolders.map(f => ({ id: f._id.toString(), name: f.name, projectId: f.projectId.toString() })) },
+      };
     }
 
-    const visibleIds = await this.prisma.getVisibleFolderIds(projectId, user.id);
-    const folders = allFolders.filter(f => visibleIds.has(f.id));
+    const visibleIds = await this.db.getVisibleFolderIds(projectId, user.id);
+    const folders = allFolders
+      .filter(f => visibleIds.has(f._id.toString()))
+      .map(f => ({ id: f._id.toString(), name: f.name, projectId: f.projectId.toString() }));
 
     return { success: true, data: { folders } };
   }
@@ -305,16 +272,18 @@ export class ProjectsController {
       );
     }
 
-    const project = await this.prisma.project.findUnique({ where: { id } });
-    if (!project) {
-      throw new HttpException(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } },
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    const project = await this.db.project.findById(id);
+    if (!project) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, HttpStatus.NOT_FOUND);
 
-    // Cascade delete handled by Prisma schema (members, files, auditLogs)
-    await this.prisma.project.delete({ where: { id } });
+    // Manual cascade delete (Mongoose doesn't do this automatically like Prisma)
+    const projId = project._id;
+    await Promise.all([
+      this.db.projectMember.deleteMany({ projectId: projId }),
+      this.db.file.deleteMany({ projectId: projId }),
+      this.db.folder.deleteMany({ projectId: projId }),
+      this.db.auditLog.deleteMany({ projectId: projId }),
+      this.db.project.deleteOne({ _id: projId }),
+    ]);
 
     return { success: true, data: { message: 'Project deleted successfully' } };
   }
