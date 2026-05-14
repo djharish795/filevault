@@ -38,7 +38,7 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
   Future<void> _restoreAndInit() async {
     // Clear stale share state from any previous session.
     ShareIntentService.instance.clear();
-    await ref.read(authProvider.notifier).restoreSession();
+    // Session restoration now handled by SplashScreen for better UX.
     if (mounted) _initShareIntent();
   }
 

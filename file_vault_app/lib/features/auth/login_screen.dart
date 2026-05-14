@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_vault_app/features/auth/auth_provider.dart';
+import 'package:file_vault_app/features/splash/widgets/file_vault_logo.dart';
 
 // ─── Design tokens matching the rest of the app ──────────────────────────────
 
 const _kPrimary      = Color(0xFFE65C2F);  // Brand orange
 const _kPrimaryLight = Color(0xFFFFF0EB);
-const _kBackground   = Color(0xFFFFFFFF);
-const _kSurface      = Color(0xFFF8F8F8);
-const _kCardBorder   = Color(0xFFEEEEEE);
-const _kTextDark     = Color(0xFF1A1A1A);
-const _kTextMid      = Color(0xFF555555);
-const _kTextGrey     = Color(0xFF999999);
+const _kBackground   = Color(0xFF0D0D0D);  // Dark graphite
+const _kSurface      = Color(0xFF1A1A1A);
+const _kCardBorder   = Color(0xFF262626);
+const _kTextDark     = Color(0xFFF5F5F5);  // Text white
+const _kTextMid      = Color(0xFFB3B3B3);
+const _kTextGrey     = Color(0xFF737373);
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -71,52 +72,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     const SizedBox(height: 40),
 
-                    // ── Logo / Brand ──────────────────────────────────────
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: _kPrimaryLight,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _kPrimary.withOpacity(0.15),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.folder_special_rounded,
-                        size: 40,
-                        color: _kPrimary,
-                      ),
+                    // ── Logo ──────────────────────────────────────────────
+                    const Center(
+                      child: FileVaultLogo(size: 180),
                     ),
-                    const SizedBox(height: 32),
-
-                    // ── Title ─────────────────────────────────────────────
-                    const Text(
-                      'FileVault',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: _kTextDark,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Secure Document Management',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                        color: _kTextGrey,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 56),
 
                     // ── Email ─────────────────────────────────────────────
                     TextFormField(
@@ -246,7 +206,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             width: 1.5,
                           ),
                         ),
-                        focusedErrorBorder: OutlineInputBorder(
+                        focusedErrorErrorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
                             color: Colors.red,
@@ -331,7 +291,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           backgroundColor: _kPrimary,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          shadowColor: _kPrimary.withOpacity(0.3),
+                          shadowColor: _kPrimary.withValues(alpha: 0.3),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -356,11 +316,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                       ),
                     ),
-                    const SizedBox(height: 24),
-
-                    // ── Info text ─────────────────────────────────────────
-                    
-                    const SizedBox(height: 40),
                   ],
                 ),
               ),

@@ -10,6 +10,7 @@ import 'package:file_vault_app/features/folders/folder_screen.dart';
 import 'package:file_vault_app/features/users/user_management_screen.dart';
 import 'package:file_vault_app/features/share_target/share_session_screen.dart';
 import 'package:file_vault_app/features/share_target/share_intent_service.dart';
+import 'package:file_vault_app/features/splash/splash_screen.dart';
 
 GoRouter createRouter(WidgetRef ref) {
   // Notifier fires when auth changes OR when pending share files arrive.
@@ -17,13 +18,16 @@ GoRouter createRouter(WidgetRef ref) {
   final routerNotifier = _RouterChangeNotifier(ref);
 
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: '/splash',
     refreshListenable: routerNotifier,
     redirect: (context, state) {
       final authState = ref.read(authProvider);
       final isAuthenticated = authState.isAuthenticated;
+      final isSplashRoute = state.matchedLocation == '/splash';
       final isLoginRoute = state.matchedLocation == '/';
       final isShareRoute = state.matchedLocation == '/share';
+
+      if (isSplashRoute) return null;
 
       // Not logged in → send to login (share state preserved in provider)
       if (!isAuthenticated && !isLoginRoute) return '/';
@@ -47,6 +51,7 @@ GoRouter createRouter(WidgetRef ref) {
       return null;
     },
     routes: [
+      GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
       GoRoute(path: '/user-home', builder: (_, __) => const UserHomeScreen()),

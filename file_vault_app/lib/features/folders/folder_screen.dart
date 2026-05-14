@@ -1048,24 +1048,23 @@ class _FolderTile extends ConsumerWidget {
                 ],
               ),
             ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: _kTextGrey, size: 20),
-              onSelected: (val) {
-                if (val == 'share') {
-                  onShare();
-                } else if (val == 'rename') {
-                  _showRenameFolderDialog(context, ref, folder, args);
-                } else if (val == 'delete') {
-                  _showDeleteFolderDialog(context, ref, folder, args);
-                }
-              },
-              itemBuilder: (context) => [
-                if (isAdmin)
+            if (isAdmin)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: _kTextGrey, size: 20),
+                onSelected: (val) {
+                  if (val == 'share') {
+                    onShare();
+                  } else if (val == 'rename') {
+                    _showRenameFolderDialog(context, ref, folder, args);
+                  } else if (val == 'delete') {
+                    _showDeleteFolderDialog(context, ref, folder, args);
+                  }
+                },
+                itemBuilder: (context) => [
                   const PopupMenuItem(
                     value: 'share',
                     child: Text('Share Access', style: TextStyle(fontSize: 13)),
                   ),
-                if (isAdmin) ...[
                   const PopupMenuItem(
                     value: 'rename',
                     child: Text('Rename', style: TextStyle(fontSize: 13)),
@@ -1075,8 +1074,7 @@ class _FolderTile extends ConsumerWidget {
                     child: Text('Delete', style: TextStyle(fontSize: 13, color: Colors.red)),
                   ),
                 ],
-              ],
-            ),
+              ),
           ],
         ),
       ),

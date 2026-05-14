@@ -5,6 +5,7 @@ import 'package:file_vault_app/features/auth/auth_provider.dart';
 import 'package:file_vault_app/features/auth/edit_profile_screen.dart';
 import 'package:file_vault_app/features/projects/project_provider.dart';
 import 'package:file_vault_app/features/folders/folder_screen.dart';
+import 'package:file_vault_app/features/splash/widgets/file_vault_logo.dart';
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 
@@ -258,6 +259,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final user     = ref.watch(authProvider).user;
+    final isAdmin  = user?.isMasterAdmin ?? false;
     final projState = ref.watch(projectListProvider);
 
     return Scaffold(
@@ -363,6 +365,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     final project = projState.projects[index];
                     return _ProjectCard(
                       project: project,
+                      isAdmin: isAdmin,
                       onTap: () => context.push(
                         '/project/${project.id}',
                         extra: {'projectName': project.name},
@@ -500,13 +503,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       elevation: 0,
       scrolledUnderElevation: 0,
       automaticallyImplyLeading: false,
-      title: const Text(
-        'File Vault',
-        style: TextStyle(
-          color: _kTextDark,
-          fontWeight: FontWeight.w700,
-          fontSize: 18,
-        ),
+      title: const Row(
+        children: [
+          FileVaultLogo(size: 32),
+        ],
       ),
       actions: [
         IconButton(
@@ -729,12 +729,14 @@ class _RecentProjectsHeader extends StatelessWidget {
 
 class _ProjectCard extends StatelessWidget {
   final dynamic project; // ProjectModel
+  final bool isAdmin;
   final VoidCallback onTap;
   final VoidCallback onRename;
   final VoidCallback onDelete;
 
   const _ProjectCard({
     required this.project,
+    required this.isAdmin,
     required this.onTap,
     required this.onRename,
     required this.onDelete,
@@ -800,40 +802,41 @@ class _ProjectCard extends StatelessWidget {
             ),
             const SizedBox(width: 8),
 
-            // ── More menu ──────────────────────────────────────────────────
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: _kTextGrey, size: 18),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              onSelected: (value) {
-                if (value == 'rename') onRename();
-                if (value == 'delete') onDelete();
-              },
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'rename',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_outlined, color: _kTextDark, size: 18),
-                      SizedBox(width: 8),
-                      Text('Rename', style: TextStyle(color: _kTextDark)),
-                    ],
+            // ── More menu (admin only) ─────────────────────────────────
+            if (isAdmin)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: _kTextGrey, size: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                onSelected: (value) {
+                  if (value == 'rename') onRename();
+                  if (value == 'delete') onDelete();
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'rename',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, color: _kTextDark, size: 18),
+                        SizedBox(width: 8),
+                        Text('Rename', style: TextStyle(color: _kTextDark)),
+                      ],
+                    ),
                   ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_outline,
-                          color: Colors.red, size: 18),
-                      SizedBox(width: 8),
-                      Text('Delete',
-                          style: TextStyle(color: Colors.red)),
-                    ],
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline,
+                            color: Colors.red, size: 18),
+                        SizedBox(width: 8),
+                        Text('Delete',
+                            style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
       ),

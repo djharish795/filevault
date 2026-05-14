@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:file_vault_app/features/auth/auth_provider.dart';
 import 'package:file_vault_app/features/auth/edit_profile_screen.dart';
 import 'package:file_vault_app/features/projects/project_provider.dart';
+import 'package:file_vault_app/features/splash/widgets/file_vault_logo.dart';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -236,13 +237,10 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
         backgroundColor: _kBackground,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
-          'File Vault',
-          style: TextStyle(
-            color: _kTextDark,
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
+        title: const Row(
+          children: [
+            FileVaultLogo(size: 32),
+          ],
         ),
         actions: [
           Padding(
