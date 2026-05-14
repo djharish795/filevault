@@ -7,7 +7,6 @@ import { AuthModule } from './auth/auth.module';
 import { ProjectsModule } from './projects/projects.module';
 import { FilesModule } from './files/files.module';
 import { SearchModule } from './search/search.module';
-import { StorageModule } from './storage/storage.module';
 import { SharingModule } from './sharing/sharing.module';
 import { AdminModule } from './admin/admin.module';
 import { FoldersModule } from './folders/folders.module';
@@ -20,7 +19,6 @@ import { FoldersModule } from './folders/folders.module';
     ProjectsModule,
     FilesModule,
     SearchModule,
-    StorageModule,
     SharingModule,
     AdminModule,
     FoldersModule,
