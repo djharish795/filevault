@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const uri = 'mongodb://File-vault-db:Naprocs2026@ac-bftiknf-shard-00-00.wsbg6hx.mongodb.net:27017/?ssl=true&authSource=admin&directConnection=true';
+const uri = 'mongodb+srv://File-vault-db:Naprocs2026@cluster0.wsbg6hx.mongodb.net/?appName=Cluster0';
 
 async function test() {
   console.log('Testing direct connection to shard 00-00...');
@@ -10,7 +10,7 @@ async function test() {
     await mongoose.disconnect();
   } catch (err) {
     console.error('❌ Failed direct connection:', err.message);
-    
+
     console.log('\nTesting shard 00-01...');
     const uri2 = uri.replace('00-00', '00-01');
     try {

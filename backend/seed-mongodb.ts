@@ -2,9 +2,13 @@ import * as mongoose from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
 
+import * as dns from 'dns';
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://File-vault-db:Naprocs2026@ac-bftiknf-shard-00-00.wsbg6hx.mongodb.net:27017/?ssl=true&authSource=admin&directConnection=true';
+// Bypass local DNS issues for MongoDB SRV lookups
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://File-vault-db:Naprocs2026@cluster0.wsbg6hx.mongodb.net/?appName=Cluster0';
 
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
