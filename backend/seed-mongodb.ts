@@ -8,7 +8,7 @@ dotenv.config();
 // Bypass local DNS issues for MongoDB SRV lookups
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://File-vault-db:Naprocs2026@cluster0.wsbg6hx.mongodb.net/?appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://File-vault-db:Naprocs2026@cluster0.wsbg6hx.mongodb.net/filevault?retryWrites=true&w=majority&appName=Cluster0';
 
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },

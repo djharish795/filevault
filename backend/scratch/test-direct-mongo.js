@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const uri = 'mongodb+srv://File-vault-db:Naprocs2026@cluster0.wsbg6hx.mongodb.net/?appName=Cluster0';
+const uri = 'mongodb+srv://File-vault-db:Naprocs2026@cluster0.wsbg6hx.mongodb.net/filevault?retryWrites=true&w=majority&appName=Cluster0';
 
 async function test() {
   console.log('Testing direct connection to shard 00-00...');
