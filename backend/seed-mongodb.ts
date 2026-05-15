@@ -4,7 +4,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://File-vault-db:Admin123@cluster0.wsbg6hx.mongodb.net/filevault';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://File-vault-db:Naprocs2026@ac-bftiknf-shard-00-00.wsbg6hx.mongodb.net:27017/?ssl=true&authSource=admin&directConnection=true';
 
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },

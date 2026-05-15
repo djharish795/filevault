@@ -206,7 +206,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             width: 1.5,
                           ),
                         ),
-                        focusedErrorErrorBorder: OutlineInputBorder(
+                        focusedErrorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
                             color: Colors.red,

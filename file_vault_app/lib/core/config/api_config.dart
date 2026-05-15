@@ -4,7 +4,7 @@
 /// All services should import and use this configuration instead of hardcoded URLs.
 class ApiConfig {
   // Production backend URL (Railway deployment)
-  static const String baseUrl = 'https://filevault-production-1be9.up.railway.app';
+  static const String baseUrl = 'https://filevault-production-b108.up.railway.app';
   
   // API version prefix
   static const String apiVersion = '/api/v1';
