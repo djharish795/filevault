@@ -18,9 +18,14 @@ class FolderModel {
     return FolderModel(
       id: json['id'] as String,
       name: json['name'] as String,
-      projectId: json['projectId'] as String,
+      // projectId may be absent in older list responses — fall back to empty.
+      projectId: (json['projectId'] as String?) ?? '',
+      // parentId is null when the folder is at the root level.
       parentId: json['parentId'] as String?,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      // createdAt may be absent in older responses — fall back to now.
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 

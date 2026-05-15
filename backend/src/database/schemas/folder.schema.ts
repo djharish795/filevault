@@ -9,8 +9,14 @@ export class Folder extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Project', required: true })
   projectId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Folder' })
-  parentId?: Types.ObjectId;
+  /// null / undefined = root-level folder; set = nested subfolder
+  @Prop({ type: Types.ObjectId, ref: 'Folder', default: null })
+  parentId?: Types.ObjectId | null;
 }
 
 export const FolderSchema = SchemaFactory.createForClass(Folder);
+
+// Index for fetching children of a folder efficiently.
+FolderSchema.index({ parentId: 1 });
+// Compound index for root-folder listing per project.
+FolderSchema.index({ projectId: 1, parentId: 1 });

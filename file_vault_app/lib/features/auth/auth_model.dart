@@ -15,8 +15,11 @@ class AuthUser {
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
+    // MongoDB returns '_id' as the document identifier.
+    // The backend may also normalize it to 'id'. Handle both safely.
+    final id = (json['id'] ?? json['_id'])?.toString() ?? '';
     return AuthUser(
-      id: json['id'] as String,
+      id: id,
       email: json['email'] as String,
       name: json['name'] as String,
       isMasterAdmin: json['isMasterAdmin'] as bool? ?? false,

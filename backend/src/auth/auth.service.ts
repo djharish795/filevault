@@ -26,7 +26,11 @@ export class AuthService {
       // Real prod scenario might use a separate refresh token strategy/secret. Ref token valid for 7d
       const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
       
-      return { user: result, accessToken, refreshToken };
+      // Normalize MongoDB _id → id so clients always receive a consistent 'id' field.
+      const { _id, password: _pw, ...rest } = userObj;
+      const normalizedUser = { id: _id.toString(), ...rest };
+      
+      return { user: normalizedUser, accessToken, refreshToken };
     }
     return null;
   }

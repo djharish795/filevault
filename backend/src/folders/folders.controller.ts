@@ -66,7 +66,16 @@ export class FoldersController {
       parentId: body.parentId ? new Types.ObjectId(body.parentId) : undefined,
     });
 
-    return { success: true, data: { id: folder._id.toString(), name: folder.name, projectId: folder.projectId.toString(), parentId: folder.parentId?.toString() } };
+    return {
+      success: true,
+      data: {
+        id: folder._id.toString(),
+        name: folder.name,
+        projectId: folder.projectId.toString(),
+        parentId: folder.parentId?.toString() ?? null,
+        createdAt: (folder as any).createdAt?.toISOString() ?? new Date().toISOString(),
+      },
+    };
   }
 
   @Get('root/:projectId')
@@ -80,14 +89,25 @@ export class FoldersController {
       if (!member) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access' } }, HttpStatus.FORBIDDEN);
     }
 
-    const allFolders = await this.db.folder.find({ projectId: projId, parentId: { $exists: false } }).sort({ createdAt: 1 });
+    const allFolders = await this.db.folder.find({
+      projectId: projId,
+      $or: [{ parentId: { $exists: false } }, { parentId: null }],
+    }).sort({ createdAt: 1 });
+
+    const toDto = (f: any) => ({
+      id: f._id.toString(),
+      name: f.name,
+      projectId: f.projectId.toString(),
+      parentId: f.parentId?.toString() ?? null,
+      createdAt: f.createdAt?.toISOString() ?? new Date().toISOString(),
+    });
 
     if (user.isMasterAdmin) {
-      return { success: true, data: { folders: allFolders.map(f => ({ id: f._id.toString(), name: f.name })) } };
+      return { success: true, data: { folders: allFolders.map(toDto) } };
     }
 
     const visibleIds = await this.db.getVisibleFolderIds(projectId, user.id);
-    const folders = allFolders.filter((f) => visibleIds.has(f._id.toString())).map(f => ({ id: f._id.toString(), name: f.name }));
+    const folders = allFolders.filter((f) => visibleIds.has(f._id.toString())).map(toDto);
 
     return { success: true, data: { folders } };
   }
@@ -102,13 +122,21 @@ export class FoldersController {
 
     const allChildren = await this.db.folder.find({ parentId: fId }).sort({ createdAt: 1 });
 
+    const toDto = (f: any) => ({
+      id: f._id.toString(),
+      name: f.name,
+      projectId: f.projectId.toString(),
+      parentId: f.parentId?.toString() ?? null,
+      createdAt: f.createdAt?.toISOString() ?? new Date().toISOString(),
+    });
+
     if (user.isMasterAdmin) {
-      return { success: true, data: { folders: allChildren.map(f => ({ id: f._id.toString(), name: f.name })) } };
+      return { success: true, data: { folders: allChildren.map(toDto) } };
     }
 
     const parent = await this.db.folder.findById(folderId);
     const visibleIds = await this.db.getVisibleFolderIds(parent?.projectId.toString() ?? '', user.id);
-    const folders = allChildren.filter((f) => visibleIds.has(f._id.toString())).map(f => ({ id: f._id.toString(), name: f.name }));
+    const folders = allChildren.filter((f) => visibleIds.has(f._id.toString())).map(toDto);
 
     return { success: true, data: { folders } };
   }
@@ -288,15 +316,26 @@ export class FoldersController {
     const folder = await this.db.folder.findById(folderId);
     if (!folder) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'Folder not found' } }, HttpStatus.NOT_FOUND);
 
-    const fId = folder._id;
-    // Manual cascade
+    // Collect all descendant folder IDs via BFS, then cascade-delete everything.
+    const allFolderIds: Types.ObjectId[] = [];
+    const queue: Types.ObjectId[] = [folder._id as Types.ObjectId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      allFolderIds.push(current);
+      const children = await this.db.folder.find({ parentId: current }, '_id');
+      for (const child of children) {
+        queue.push(child._id as Types.ObjectId);
+      }
+    }
+
+    // Delete all related data for every folder in the subtree.
     await Promise.all([
-      this.db.folderAccess.deleteMany({ folderId: fId }),
-      this.db.message.deleteMany({ folderId: fId }),
-      this.db.file.deleteMany({ folderId: fId }),
-      this.db.folder.deleteOne({ _id: fId }),
+      this.db.folderAccess.deleteMany({ folderId: { $in: allFolderIds } }),
+      this.db.message.deleteMany({ folderId: { $in: allFolderIds } }),
+      this.db.file.deleteMany({ folderId: { $in: allFolderIds } }),
+      this.db.folder.deleteMany({ _id: { $in: allFolderIds } }),
     ]);
 
-    return { success: true, data: { message: 'Folder deleted' } };
+    return { success: true, data: { message: 'Folder and all nested subfolders deleted' } };
   }
 }
