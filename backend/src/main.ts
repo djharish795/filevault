@@ -5,6 +5,10 @@ import cookieParser from 'cookie-parser';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing! The server will not start without a secure signing key.');
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Cookie parsing for HttpOnly refresh tokens

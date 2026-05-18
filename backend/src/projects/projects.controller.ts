@@ -247,21 +247,29 @@ export class ProjectsController {
       if (!member) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access' } }, HttpStatus.FORBIDDEN);
     }
 
-    const allFolders = await this.db.folder.find({ projectId: projId }).sort({ createdAt: 1 });
+    const toDto = (f: any) => ({
+      id: f._id.toString(),
+      name: f.name,
+      projectId: f.projectId.toString(),
+    });
 
     if (user.isMasterAdmin) {
+      const allFolders = await this.db.folder.find({ projectId: projId }).sort({ createdAt: 1 });
       return {
         success: true,
-        data: { folders: allFolders.map(f => ({ id: f._id.toString(), name: f.name, projectId: f.projectId.toString() })) },
+        data: { folders: allFolders.map(toDto) },
       };
     }
 
     const visibleIds = await this.db.getAccessibleFolderIds(projectId, user.id, user.isMasterAdmin);
-    const folders = allFolders
-      .filter(f => visibleIds.has(f._id.toString()))
-      .map(f => ({ id: f._id.toString(), name: f.name, projectId: f.projectId.toString() }));
+    
+    // Database-level authorization intersection
+    const folders = await this.db.folder.find({
+      projectId: projId,
+      _id: { $in: Array.from(visibleIds).map(id => new Types.ObjectId(id)) }
+    }).sort({ createdAt: 1 });
 
-    return { success: true, data: { folders } };
+    return { success: true, data: { folders: folders.map(toDto) } };
   }
 
   @Delete(':id')

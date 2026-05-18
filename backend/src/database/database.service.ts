@@ -85,19 +85,37 @@ export class DatabaseService {
       }
     });
 
-    // 4. Trace parents upward to the root (breadcrumb trail)
-    const allFolders = await this.folder.find({ projectId: projId }).select('_id parentId');
-    const parentMap = new Map<string, string>();
-    allFolders.forEach((f) => {
-      if (f.parentId) parentMap.set(f._id.toString(), f.parentId.toString());
-    });
+    // 4. Trace parents upward to the root (breadcrumb trail) using materialized path ancestry
+    const foldersWithPaths = await this.folder.find({
+      _id: { $in: Array.from(baseIds).map(id => new Types.ObjectId(id)) }
+    }).select('_id parentId path');
 
     const visibleIds = new Set<string>();
-    for (const baseId of baseIds) {
-      let curr: string | undefined = baseId;
-      while (curr && !visibleIds.has(curr)) {
-        visibleIds.add(curr);
-        curr = parentMap.get(curr);
+    baseIds.forEach(id => visibleIds.add(id));
+
+    // Fallback parent map resolver for legacy folders without the path property populated
+    let parentMap: Map<string, string> | null = null;
+
+    for (const f of foldersWithPaths) {
+      if (f.path && f.path.length > 0) {
+        // Use high-performance materialized path
+        f.path.forEach((ancestorId) => {
+          visibleIds.add(ancestorId.toString());
+        });
+      } else if (f.parentId) {
+        // Fallback to recursive traversal for unmigrated legacy folders
+        if (!parentMap) {
+          const allFolders = await this.folder.find({ projectId: projId }).select('_id parentId');
+          parentMap = new Map<string, string>();
+          allFolders.forEach((fol) => {
+            if (fol.parentId) parentMap!.set(fol._id.toString(), fol.parentId.toString());
+          });
+        }
+        let curr: string | undefined = f.parentId.toString();
+        while (curr && !visibleIds.has(curr)) {
+          visibleIds.add(curr);
+          curr = parentMap.get(curr);
+        }
       }
     }
 
@@ -192,5 +210,44 @@ export class DatabaseService {
 
     const accessibleFileIds = await this.getAccessibleFileIds(file.projectId.toString(), userId, isAdmin);
     return accessibleFileIds.has(fileId);
+  }
+
+  /**
+   * High-performance centralized resolver to fetch all accessible file IDs for a user globally.
+   * Eliminates nested looping over projects and prevents repeated database roundtrips.
+   */
+  async getAllAccessibleFileIds(userId: string, isAdmin: boolean): Promise<Set<string>> {
+    const uId = new Types.ObjectId(userId);
+
+    if (isAdmin) {
+      const allFiles = await this.file.find().select('_id');
+      return new Set(allFiles.map(f => f._id.toString()));
+    }
+
+    // 1. Files explicitly shared with the user
+    const sharedFileAccesses = await this.fileAccess.find({ userId: uId }).select('fileId');
+    const sharedFileIds = sharedFileAccesses
+      .filter((fa: any) => !!fa.fileId)
+      .map((fa: any) => fa.fileId.toString());
+
+    // 2. Files owned by the user
+    const ownedFiles = await this.file.find({ ownerId: uId }).select('_id');
+    const ownedFileIds = ownedFiles.map(f => f._id.toString());
+
+    // 3. Files in folders explicitly shared with the user
+    const folderAccesses = await this.folderAccess.find({ userId: uId }).select('folderId');
+    const sharedFolderIds = folderAccesses
+      .filter((fa: any) => !!fa.folderId)
+      .map((fa: any) => fa.folderId);
+
+    const folderFiles = await this.file.find({ folderId: { $in: sharedFolderIds } }).select('_id');
+    const folderFileIds = folderFiles.map(f => f._id.toString());
+
+    const fileIds = new Set<string>();
+    sharedFileIds.forEach(id => fileIds.add(id));
+    ownedFileIds.forEach(id => fileIds.add(id));
+    folderFileIds.forEach(id => fileIds.add(id));
+
+    return fileIds;
   }
 }

@@ -26,3 +26,8 @@ export class File extends Document {
 }
 
 export const FileSchema = SchemaFactory.createForClass(File);
+
+// Index for locating files within a folder efficiently.
+FileSchema.index({ folderId: 1 });
+// Index for querying project-level files efficiently.
+FileSchema.index({ projectId: 1 });

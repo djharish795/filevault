@@ -20,30 +20,15 @@ export class SearchController {
     }
 
     try {
-      let accessibleProjectIds: Types.ObjectId[] = [];
-      const uId = new Types.ObjectId(user.id);
-      
-      if (user.isMasterAdmin) {
-        const allProjects = await this.db.project.find().select('_id');
-        accessibleProjectIds = allProjects.map(p => p._id as Types.ObjectId);
-      } else {
-        const memberProjects = await this.db.projectMember.find({ userId: uId }).select('projectId');
-        accessibleProjectIds = memberProjects.map(m => m.projectId as Types.ObjectId);
-      }
+      // Centralized query approach: fetch all accessible file IDs once globally
+      const allowedFileIds = await this.db.getAllAccessibleFileIds(user.id, user.isMasterAdmin);
 
-      if (accessibleProjectIds.length === 0) {
+      if (allowedFileIds.size === 0) {
         return { success: true, data: { files: [], totalCount: 0, query: query.trim() } };
       }
 
-      // Collect all authorized file IDs for the user across their projects
-      const allowedFileIds: string[] = [];
-      for (const projId of accessibleProjectIds) {
-        const fileIds = await this.db.getAccessibleFileIds(projId.toString(), user.id, user.isMasterAdmin);
-        fileIds.forEach(id => allowedFileIds.push(id));
-      }
-
       const files = await this.db.file.find({
-        _id: { $in: allowedFileIds.map(id => new Types.ObjectId(id)) },
+        _id: { $in: Array.from(allowedFileIds).map(id => new Types.ObjectId(id)) },
         name: { $regex: query.trim(), $options: 'i' },
       })
       .populate('ownerId', 'name email')
