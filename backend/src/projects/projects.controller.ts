@@ -108,46 +108,48 @@ export class ProjectsController {
 
     const permissions = { can_view: true, can_upload: true, can_delete: true, can_share: true };
 
-    // File visibility
-    let visibleFiles;
+    // File visibility using centralized getAccessibleFileIds
+    let mappedFiles;
     if (user.isMasterAdmin) {
-      visibleFiles = await this.db.file.find({ projectId: projId }).populate('ownerId', 'name email').sort({ createdAt: -1 });
+      const visibleFiles = await this.db.file.find({ projectId: projId }).populate('ownerId', 'name email').sort({ createdAt: -1 });
+      mappedFiles = visibleFiles.map((file: any) => ({
+        id: file._id.toString(),
+        name: file.name,
+        type: file.mimeType,
+        size: file.size,
+        folderId: file.folderId?.toString() ?? null,
+        updatedAt: file.updatedAt.toISOString().split('T')[0],
+        owner: file.ownerId?.name ?? 'Unknown',
+        permissions: {
+          canView: true,
+          canDownload: true,
+          canDelete: true,
+          canShare: true,
+        },
+      }));
     } else {
-      const uId = new Types.ObjectId(user.id);
-      
-      // Get shared file IDs
-      const sharedFileAccess = await this.db.fileAccess.find({ userId: uId });
-      const sharedFileIds = sharedFileAccess.map(a => a.fileId.toString());
-
-      // Get shared folder IDs
-      const folderAccess = await this.db.folderAccess.find({ userId: uId });
-      const sharedFolderIds = folderAccess.map(a => a.folderId.toString());
-
-      visibleFiles = await this.db.file.find({
+      const accessibleFileIds = await this.db.getAccessibleFileIds(id, user.id, user.isMasterAdmin);
+      const visibleFiles = await this.db.file.find({
         projectId: projId,
-        $or: [
-          { ownerId: uId },
-          { _id: { $in: sharedFileIds } },
-          { folderId: { $in: sharedFolderIds } },
-        ],
+        _id: { $in: Array.from(accessibleFileIds).map(id => new Types.ObjectId(id)) },
       }).populate('ownerId', 'name email').sort({ createdAt: -1 });
-    }
 
-    const mappedFiles = visibleFiles.map((file: any) => ({
-      id: file._id.toString(),
-      name: file.name,
-      type: file.mimeType,
-      size: file.size,
-      folderId: file.folderId?.toString() ?? null,
-      updatedAt: file.updatedAt.toISOString().split('T')[0],
-      owner: file.ownerId?.name ?? 'Unknown',
-      permissions: {
-        canView: true,
-        canDownload: true,
-        canDelete: user.isMasterAdmin || file.ownerId?._id.toString() === user.id,
-        canShare: user.isMasterAdmin || file.ownerId?._id.toString() === user.id,
-      },
-    }));
+      mappedFiles = visibleFiles.map((file: any) => ({
+        id: file._id.toString(),
+        name: file.name,
+        type: file.mimeType,
+        size: file.size,
+        folderId: file.folderId?.toString() ?? null,
+        updatedAt: file.updatedAt.toISOString().split('T')[0],
+        owner: file.ownerId?.name ?? 'Unknown',
+        permissions: {
+          canView: true,
+          canDownload: true,
+          canDelete: file.ownerId?._id.toString() === user.id,
+          canShare: file.ownerId?._id.toString() === user.id,
+        },
+      }));
+    }
 
     return {
       success: true,
@@ -254,7 +256,7 @@ export class ProjectsController {
       };
     }
 
-    const visibleIds = await this.db.getVisibleFolderIds(projectId, user.id);
+    const visibleIds = await this.db.getAccessibleFolderIds(projectId, user.id, user.isMasterAdmin);
     const folders = allFolders
       .filter(f => visibleIds.has(f._id.toString()))
       .map(f => ({ id: f._id.toString(), name: f.name, projectId: f.projectId.toString() }));

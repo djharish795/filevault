@@ -74,6 +74,15 @@ export class FilesController {
     const canUpload = await this.checkUploadPermission(projectId, user);
     if (!canUpload) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No upload permission' } }, HttpStatus.FORBIDDEN);
 
+    // Enforce that the user must have access to the destination folder if one is specified
+    const folderIdStr = req.body?.folderId;
+    if (folderIdStr) {
+      const hasFolderAccess = await this.db.canAccessFolder(folderIdStr, user.id, user.isMasterAdmin);
+      if (!hasFolderAccess) {
+        throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access to destination folder' } }, HttpStatus.FORBIDDEN);
+      }
+    }
+
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     const ext = extname(file.originalname);
@@ -96,7 +105,7 @@ export class FilesController {
 
       const projId = new Types.ObjectId(projectId);
       const uId = new Types.ObjectId(user.id);
-      const folderId = req.body?.folderId ? new Types.ObjectId(req.body.folderId) : undefined;
+      const folderId = folderIdStr ? new Types.ObjectId(folderIdStr) : undefined;
 
       // 2. Store Metadata in MongoDB
       const saved: any = await this.db.file.create({
@@ -109,12 +118,8 @@ export class FilesController {
         folderId,
       });
 
-      if (user.isMasterAdmin) {
-        const members = await this.db.projectMember.find({ projectId: projId, userId: { $ne: uId } });
-        if (members.length > 0) {
-          await this.db.fileAccess.insertMany(members.map(m => ({ fileId: saved._id, userId: m.userId })));
-        }
-      }
+      // Secure: Removed the auto-granting fileAccess logic for admins to prevent major security leaks.
+      // Files inside folders inherit folder-level permissions, and explicit shares can still be added manually.
 
       await this.db.auditLog.create({
         action: 'FILE_UPLOADED',
@@ -157,7 +162,8 @@ export class FilesController {
     const file = await this.db.file.findOne({ _id: new Types.ObjectId(fileId), projectId: new Types.ObjectId(projectId) });
     if (!file) throw new HttpException({ success: false, error: { code: 'NOT_FOUND', message: 'File not found' } }, HttpStatus.NOT_FOUND);
 
-    const canView = await this.checkViewPermission(projectId, user);
+    // Secure: Centralized file-level/folder-level check using canAccessFile
+    const canView = await this.db.canAccessFile(fileId, user.id, user.isMasterAdmin);
     if (!canView) throw new HttpException({ success: false, error: { code: 'FORBIDDEN', message: 'No access' } }, HttpStatus.FORBIDDEN);
 
     try {

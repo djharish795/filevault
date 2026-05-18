@@ -16,35 +16,7 @@ export class FoldersController {
     userId: string,
     isAdmin: boolean,
   ): Promise<boolean> {
-    if (isAdmin) return true;
-    const fId = new Types.ObjectId(folderId);
-    const uId = new Types.ObjectId(userId);
-
-    const folderAccess = await this.db.folderAccess.findOne({ folderId: fId, userId: uId });
-    if (folderAccess) return true;
-
-    const accessibleFile = await this.db.file.findOne({
-      folderId: fId,
-      $or: [
-        { ownerId: uId },
-        // FileAccess check would require a join or separate query
-      ],
-    });
-    if (accessibleFile) return true;
-
-    // Check FileAccess explicitly
-    const fileAccess = await this.db.fileAccess.find({ userId: uId }).populate('fileId');
-    const hasFileAccessInFolder = fileAccess.some((fa: any) => fa.fileId?.folderId?.toString() === folderId);
-    if (hasFileAccessInFolder) return true;
-
-    try {
-      const folder = await this.db.folder.findById(folderId);
-      if (!folder) return false;
-      const visibleIds = await this.db.getVisibleFolderIds(folder.projectId.toString(), userId);
-      return visibleIds.has(folderId);
-    } catch {
-      return false;
-    }
+    return this.db.canAccessFolder(folderId, userId, isAdmin);
   }
 
   @Post()
@@ -106,7 +78,7 @@ export class FoldersController {
       return { success: true, data: { folders: allFolders.map(toDto) } };
     }
 
-    const visibleIds = await this.db.getVisibleFolderIds(projectId, user.id);
+    const visibleIds = await this.db.getAccessibleFolderIds(projectId, user.id, user.isMasterAdmin);
     const folders = allFolders.filter((f) => visibleIds.has(f._id.toString())).map(toDto);
 
     return { success: true, data: { folders } };
@@ -135,7 +107,7 @@ export class FoldersController {
     }
 
     const parent = await this.db.folder.findById(folderId);
-    const visibleIds = await this.db.getVisibleFolderIds(parent?.projectId.toString() ?? '', user.id);
+    const visibleIds = await this.db.getAccessibleFolderIds(parent?.projectId.toString() ?? '', user.id, user.isMasterAdmin);
     const folders = allChildren.filter((f) => visibleIds.has(f._id.toString())).map(toDto);
 
     return { success: true, data: { folders } };

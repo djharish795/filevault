@@ -35,9 +35,16 @@ export class SearchController {
         return { success: true, data: { files: [], totalCount: 0, query: query.trim() } };
       }
 
+      // Collect all authorized file IDs for the user across their projects
+      const allowedFileIds: string[] = [];
+      for (const projId of accessibleProjectIds) {
+        const fileIds = await this.db.getAccessibleFileIds(projId.toString(), user.id, user.isMasterAdmin);
+        fileIds.forEach(id => allowedFileIds.push(id));
+      }
+
       const files = await this.db.file.find({
+        _id: { $in: allowedFileIds.map(id => new Types.ObjectId(id)) },
         name: { $regex: query.trim(), $options: 'i' },
-        projectId: { $in: accessibleProjectIds },
       })
       .populate('ownerId', 'name email')
       .populate('projectId', 'name caseNumber')
